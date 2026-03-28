@@ -56,22 +56,26 @@ const fragmentShader = `
 `;
 
 // Compute real-time sun direction from UTC time
-function getSunDirection(date) {
+export function getSunDirection(date) {
   const dayOfYear = Math.floor((date - new Date(date.getFullYear(), 0, 0)) / 86400000)
   const hours = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600
 
   // Sun latitude (solar declination)
   const sunLat = -23.44 * Math.cos((360 / 365) * (dayOfYear + 10) * (Math.PI / 180))
   
-  // Sun longitude (Earth rotates 15 degrees per hour, 12:00 UTC = 0 degrees)
-  const sunLon = 180 - (hours * 15)
+  // Calculate the Earth longitude that is currently at Noon (facing the sun)
+  // At 12:00 UTC, the 0° Meridian (London) faces the sun.
+  // We add 180 here to exactly match the texture's native UV seam on the SphereGeometry.
+  const noonLon = (12 - hours) * 15 + 180
 
-  const latRad = sunLat * Math.PI / 180
-  const lonRad = sunLon * Math.PI / 180
+  // Map this to our 3D globe's native coordinate system (theta/phi Spherical mapping)
+  // This physically moves the sun light identical to how ground coordinates map
+  const theta = (noonLon + 90) * (Math.PI / 180)
+  const phi = (90 - sunLat) * (Math.PI / 180)
 
-  const x = Math.sin(lonRad) * Math.cos(latRad)
-  const y = Math.sin(latRad)
-  const z = -Math.cos(lonRad) * Math.cos(latRad)
+  const x = -Math.sin(phi) * Math.cos(theta)
+  const y = Math.cos(phi)
+  const z = Math.sin(phi) * Math.sin(theta)
 
   return new THREE.Vector3(x, y, z).normalize()
 }

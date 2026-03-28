@@ -1,6 +1,7 @@
 import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { getSunDirection } from './Earth'
 
 /**
  * Renders a glowing impact area on the sun-facing side of the Earth
@@ -72,12 +73,12 @@ export default function CMEImpactGlow({ active = false, intensity = 6.0, color =
     // Animate shader properties
     matRef.current.uniforms.time.value = t
     
-    // Smoothly interpolate intensity target
+    // Smoothly interpolate intensity target (scale based on 0-9 Kp backend scale)
     const targetIntensity = active ? intensity : 0
     matRef.current.uniforms.intensity.value += (targetIntensity - matRef.current.uniforms.intensity.value) * 0.1
 
-    // Always maintain sun-facing orientation (simulating the Earth rotating inside the static magnetic bow shock)
-    const sunDir = new THREE.Vector3(5, 1, 3).normalize()
+    // Fetch the real-time astronomical orientation of the Sun relative to the Earth mesh
+    const sunDir = getSunDirection(new Date())
     const targetQ = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), sunDir)
     glowRef.current.quaternion.copy(targetQ)
     

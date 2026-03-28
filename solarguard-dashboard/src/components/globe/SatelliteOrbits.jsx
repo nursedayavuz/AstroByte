@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import { Html, Line } from '@react-three/drei'
 import * as THREE from 'three'
 import { twoline2satrec, propagate, gstime, eciToGeodetic } from 'sgp4'
+import { latLonToVec3 } from '../../utils/latLonToVec3'
 
 const SAT_COLORS = {
   TURKEY: new THREE.Color('#ff2222'),
@@ -122,15 +123,13 @@ export default function SatelliteOrbits({ visible = true, filter = 'ALL', timeMu
         // Scale distance: altKm / earthRadiusKm.
         const r = 1 + (height / earthRadiusKm)
 
-        // Convert lat/lon to Three.js coordinates (Y is up, so latitude affects Y)
-        const phi = (90 - (latitude * 180 / Math.PI)) * (Math.PI / 180)
-        const theta = (longitude * 180 / Math.PI + 90) * (Math.PI / 180)
-
-        const x = r * Math.sin(phi) * Math.cos(theta)
-        const z = r * Math.sin(phi) * Math.sin(theta)
-        const y = r * Math.cos(phi)
-
-        dummy.position.set(x, y, z)
+        // latitude/longitude are in radians from eciToGeodetic
+        const latDeg = latitude * (180 / Math.PI)
+        const lonDeg = longitude * (180 / Math.PI)
+        
+        // Use the unified standard coordinate mapper
+        const mappedPos = latLonToVec3(latDeg, lonDeg, r)
+        dummy.position.copy(mappedPos)
         
         // Scale differently: Turkish = huge, others = tiny
         const scale = activeSats[i].category === 'TURKEY' ? 2.5 : 0.8
