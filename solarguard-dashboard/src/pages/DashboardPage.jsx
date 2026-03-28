@@ -156,8 +156,20 @@ export default function DashboardPage({ satellites, groundAssets, alertState, fo
               <span className="font-data" style={{ fontSize: 14, color: 'var(--cyan)', fontWeight: 800 }}>{alertState.solar_wind != null ? alertState.solar_wind.toFixed(1) : '-'} <span style={{fontSize:9}}>km/s</span></span>
             </div>
             <div className="flex flex-col gap-1 p-2" style={{ background: 'rgba(0,0,0,0.3)', borderRadius: 6 }}>
+              <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>PLAZMA YOĞUNLUĞU</span>
+              <span className="font-data" style={{ fontSize: 14, color: 'var(--cyan)', fontWeight: 800 }}>{alertState.density != null ? alertState.density.toFixed(2) : '-'} <span style={{fontSize:9}}>p/cm³</span></span>
+            </div>
+            <div className="flex flex-col gap-1 p-2" style={{ background: 'rgba(0,0,0,0.3)', borderRadius: 6 }}>
               <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>MANYETİK ALAN (Bz)</span>
               <span className="font-data" style={{ fontSize: 14, color: alertState.bz_gsm != null && alertState.bz_gsm < -5 ? 'var(--red)' : 'var(--cyan)', fontWeight: 800 }}>{alertState.bz_gsm != null ? alertState.bz_gsm.toFixed(2) : '-'} <span style={{fontSize:9}}>nT</span></span>
+            </div>
+            <div className="flex flex-col gap-1 p-2" style={{ background: 'rgba(0,0,0,0.3)', borderRadius: 6 }}>
+              <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>PROTON AKIŞI</span>
+              <span className="font-data" style={{ fontSize: 14, color: 'var(--cyan)', fontWeight: 800 }}>{alertState.proton_flux != null ? alertState.proton_flux.toFixed(2) : '-'} <span style={{fontSize:9}}>p/cm³</span></span>
+            </div>
+            <div className="flex flex-col gap-1 p-2" style={{ background: 'rgba(0,0,0,0.3)', borderRadius: 6, gridColumn: 'span 2' }}>
+              <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>KP GERÇEK ZAMANLI</span>
+              <span className="font-data" style={{ fontSize: 16, color: alertState.kp_current != null && alertState.kp_current >= 5 ? 'var(--red)' : alertState.kp_current != null && alertState.kp_current >= 4 ? '#ffaa00' : 'var(--cyan)', fontWeight: 800 }}>{alertState.kp_current != null ? alertState.kp_current.toFixed(1) : '-'}</span>
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import React, { Suspense, useRef } from 'react'
+import React, { Suspense, useRef, useState, useEffect } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls, AdaptiveDpr, Stars } from '@react-three/drei'
 import Earth from './Earth'
@@ -70,6 +70,33 @@ function GlobalHeadlight() {
 }
 
 export default function EarthGlobe({ satellites = [], groundAssets = [], kpIndex = 6, toggles = {}, swarmFilter = 'ALL', timeMultiplier = 1, backendEnabled = true }) {
+  const [key, setKey] = useState(0)
+  const canvasRef = useRef()
+
+  // Handle WebGL context loss and restore
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const handleContextLost = (event) => {
+      event.preventDefault()
+      console.warn('WebGL context lost, attempting to restore...')
+    }
+
+    const handleContextRestored = () => {
+      console.log('WebGL context restored, remounting canvas...')
+      setKey(prev => prev + 1)
+    }
+
+    canvas.addEventListener('webglcontextlost', handleContextLost)
+    canvas.addEventListener('webglcontextrestored', handleContextRestored)
+
+    return () => {
+      canvas.removeEventListener('webglcontextlost', handleContextLost)
+      canvas.removeEventListener('webglcontextrestored', handleContextRestored)
+    }
+  }, [])
+
   return (
     <div
       role="img"
@@ -77,6 +104,8 @@ export default function EarthGlobe({ satellites = [], groundAssets = [], kpIndex
       style={{ width: '100%', height: '100%' }}
     >
       <Canvas
+        key={key}
+        ref={canvasRef}
         camera={{ position: [0, 0.5, 2.8], fov: 42 }}
         dpr={[1, 1.5]}
         gl={{
@@ -84,6 +113,8 @@ export default function EarthGlobe({ satellites = [], groundAssets = [], kpIndex
           powerPreference: 'high-performance',
           stencil: false,
           depth: true,
+          preserveDrawingBuffer: false,
+          failIfMajorPerformanceCaveat: false,
         }}
         style={{ width: '100%', height: '100%' }}
       >

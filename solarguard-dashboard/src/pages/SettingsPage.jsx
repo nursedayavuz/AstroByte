@@ -50,13 +50,6 @@ export default function SettingsPage({ isLive }) {
   const t = createTranslator(settings.language)
   const [healthStatus, setHealthStatus] = useState(null)
 
-  // Auto-enable backend on mount if it's disabled
-  useEffect(() => {
-    if (!settings.backendEnabled) {
-      updateSetting('backendEnabled', true)
-    }
-  }, [])
-
   useEffect(() => {
     if (settings.backendEnabled) {
       fetch('/api/health').then(r => r.ok ? r.json() : null)

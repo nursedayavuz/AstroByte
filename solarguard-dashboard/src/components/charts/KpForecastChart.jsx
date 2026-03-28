@@ -24,7 +24,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 export default function KpForecastChart({ data = [], height = 200, showLegend = false, mini = false }) {
   return (
-    <ResponsiveContainer width="100%" height={height}>
+    <ResponsiveContainer width="100%" height={height} minWidth={0} minHeight={0}>
       <ComposedChart data={data} margin={{ top: 10, right: 10, left: mini ? -20 : 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
         <XAxis

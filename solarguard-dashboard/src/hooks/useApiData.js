@@ -42,6 +42,8 @@ export function useApiData(backendEnabled = true) {
         fetch(`${API_BASE}/wsa-enlil`).then(r => r.ok ? r.json() : null).catch(() => null),
         fetch(`${API_BASE}/radiation-belt-enhancement`).then(r => r.ok ? r.json() : null).catch(() => null),
         fetch(`${API_BASE}/latest-flare`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`${API_BASE}/goes-xray`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`${API_BASE}/telemetry-summary`).then(r => r.ok ? r.json() : null).catch(() => null),
       ])
 
       // ★ POST-FLIGHT CHECK: If backend was disabled while we were fetching, discard results
@@ -51,7 +53,7 @@ export function useApiData(backendEnabled = true) {
         return
       }
       
-      const [risk, forecast, history, metrics, flares, storms, notifications, shocks, wsaEnlil, rbe, latestFlare] = responses
+      const [risk, forecast, history, metrics, flares, storms, notifications, shocks, wsaEnlil, rbe, latestFlare, goesXray, telemetrySummary] = responses
       
       // If ANY core data exists, consider it a successful fetch.
       // Previously, minor API timeouts caused the entire dashboard to go blank.
@@ -70,19 +72,26 @@ export function useApiData(backendEnabled = true) {
            shocks: shocks || prev?.shocks,
            wsaEnlil: wsaEnlil || prev?.wsaEnlil,
            rbe: rbe || prev?.rbe,
-           latestFlare: latestFlare || prev?.latestFlare
+           latestFlare: latestFlare || prev?.latestFlare,
+           goesXray: goesXray || prev?.goesXray,
+           telemetrySummary: telemetrySummary || prev?.telemetrySummary
         }))
         setIsLive(true)
         setLastUpdate(new Date())
         failCount.current = 0
       } else {
-        // HACK: For UI demo/testing purposes, keep the system "LIVE" 
-        // even if the Python backend is offline, to prevent connection errors.
-        setIsLive(true)
+        // Track consecutive failures and set offline after 3 attempts
+        failCount.current += 1
+        if (failCount.current >= 3) {
+          setIsLive(false)
+        }
       }
     } catch {
-      // Ignore errors and keep UI looking active
-      setIsLive(true)
+      // Track consecutive failures and set offline after 3 attempts
+      failCount.current += 1
+      if (failCount.current >= 3) {
+        setIsLive(false)
+      }
     }
   }
 
@@ -188,7 +197,11 @@ export function useApiData(backendEnabled = true) {
   //         (was incorrectly using lstm.precision_24h which is a model accuracy metric ≈ 1.0)
   const calculatedAlertState = useMemo(() => ({
     kp_current: (() => {
-      // Önce realtime telemetri'den son Kp'yi al
+      // Önce telemetry-summary'den Kp'yi al
+      if (data?.telemetrySummary?.kp_index != null) {
+        return data.telemetrySummary.kp_index
+      }
+      // Sonra realtime telemetri'den son Kp'yi al
       const events = data?.history?.highlight_events
       if (events?.length > 0) {
         return events[events.length - 1]?.kp_subsequent ?? null
@@ -198,12 +211,13 @@ export function useApiData(backendEnabled = true) {
       if (firstForecast?.kp_lstm != null) return firstForecast.kp_lstm
       return null
     })(),
-    current_flare: data?.latestFlare?.flare_class || (data ? highestFlare : null),
-    solar_wind: data?.history?.realtime_telemetry?.solar_wind_speed ?? null,
-    bz_gsm: data?.history?.realtime_telemetry?.bz_gsm ?? null,
-    density: data?.history?.realtime_telemetry?.proton_density ?? null,
+    current_flare: data?.goesXray?.flare_class || data?.latestFlare?.flare_class || (data ? highestFlare : null),
+    solar_wind: data?.telemetrySummary?.wind_speed ?? data?.history?.realtime_telemetry?.solar_wind_speed ?? null,
+    bz_gsm: data?.telemetrySummary?.imf_bz ?? data?.history?.realtime_telemetry?.bz_gsm ?? null,
+    density: data?.telemetrySummary?.density ?? data?.history?.realtime_telemetry?.proton_density ?? null,
+    proton_flux: data?.telemetrySummary?.proton_flux ?? null,
     prob_mx_24h: data?.risk?.prob_mx_event ?? null,
-  }), [highestFlare, data?.risk, data?.history, data?.forecast, data?.latestFlare])
+  }), [highestFlare, data?.risk, data?.history, data?.forecast, data?.latestFlare, data?.telemetrySummary])
 
   const compositeAlertLevel = maxClass === 'X' ? 'RED' : maxClass === 'M' ? 'ORANGE' : 'GREEN'
 

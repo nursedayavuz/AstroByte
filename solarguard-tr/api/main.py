@@ -7,6 +7,7 @@ NO MOCK DATA. Uses Real NOAA SWPC and NASA DONKI APIs.
 Version: 4.0.0 (Complete Rewrite)
 """
 import sys
+import requests
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional
@@ -49,6 +50,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Simple in-memory cache for GOES X-Ray
+_cache = {}
 
 
 # ============================================================================
@@ -142,7 +146,7 @@ def get_model_metrics():
 
 
 # ============================================================================
-# NOAA X-Ray Flux Endpoint
+# NOAA X-Ray Flux Endpoints
 # ============================================================================
 
 @app.get("/api/latest-flare")
@@ -157,6 +161,48 @@ async def read_latest_flare():
     if not data:
         raise HTTPException(status_code=503, detail="Veri kaynağına ulaşılamıyor")
     return data
+
+
+@app.get("/api/goes-xray")
+async def read_goes_xray_flux():
+    """
+    Get latest GOES X-Ray Flux data with 2-minute cache
+    
+    Returns:
+        Dictionary with time_tag, flux, flare_class, and satellite
+    """
+    data = await noaa_client.get_goes_xray_flux()
+    if not data:
+        raise HTTPException(status_code=503, detail="GOES X-Ray verisine ulaşılamıyor")
+    return data
+
+
+@app.get("/api/telemetry-summary")
+async def get_telemetry_summary():
+    """
+    Get complete telemetry summary with all space weather parameters
+    
+    Returns:
+        Dictionary with wind_speed, density, imf_bz, proton_flux, kp_index, and status
+    """
+    try:
+        # Get all telemetry data from NOAA client
+        wind_data = noaa_client.get_solar_wind_data()  # Speed and Density
+        mag_data = noaa_client.get_mag_field_data()    # Bz
+        proton_data = noaa_client.get_proton_flux()    # Proton
+        kp_data = noaa_client.get_realtime_kp()        # Kp
+        
+        return {
+            "wind_speed": wind_data.get("speed"),
+            "density": wind_data.get("density"),
+            "imf_bz": mag_data.get("bz"),
+            "proton_flux": proton_data.get("flux"),
+            "kp_index": kp_data.get("kp"),
+            "status": "active"
+        }
+    except Exception as e:
+        logger.error(f"Error fetching telemetry summary: {e}")
+        return {"status": "error", "message": str(e)}
 
 
 # ============================================================================
@@ -547,3 +593,46 @@ if __name__ == "__main__":
         reload=True,
         log_level="info"
     )
+
+
+# ============================================================================
+# GOES X-Ray Endpoint (Direct Implementation)
+# ============================================================================
+
+@app.get("/api/goes-xray")
+def get_goes_xray():
+    """
+    Get latest GOES X-Ray Flux data with 2-minute cache
+    
+    Returns:
+        Dictionary with time_tag, flux, flare_class, and satellite
+    """
+    cache_key = "goes_xray"
+    now = datetime.now(timezone.utc)
+    if cache_key in _cache:
+        cached_time, cached_data = _cache[cache_key]
+        if (now - cached_time).total_seconds() < 120:
+            return cached_data
+    try:
+        r = requests.get(
+            "https://services.swpc.noaa.gov/json/goes/primary/xrays-1-day.json",
+            timeout=10
+        )
+        if r.status_code == 200:
+            data = r.json()
+            long_band = [d for d in data if d.get("energy") == "0.1-0.8nm" or d.get("band") == "0.1-0.8nm"]
+            if not long_band:
+                long_band = data
+            latest = long_band[-1]
+            flux = latest.get("flux", 0) or 0
+            if flux >= 1e-4: cls = f"X{flux/1e-4:.1f}"
+            elif flux >= 1e-5: cls = f"M{flux/1e-5:.1f}"
+            elif flux >= 1e-6: cls = f"C{flux/1e-6:.1f}"
+            elif flux >= 1e-7: cls = f"B{flux/1e-7:.1f}"
+            else: cls = f"A{flux/1e-8:.1f}"
+            result = {"time_tag": latest.get("time_tag"), "flux": flux, "flare_class": cls, "satellite": latest.get("satellite")}
+            _cache[cache_key] = (now, result)
+            return result
+    except Exception as e:
+        print(f"GOES X-Ray Error: {e}")
+    return {"time_tag": None, "flux": None, "flare_class": "Bilinmiyor", "satellite": None}

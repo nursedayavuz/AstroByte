@@ -229,6 +229,80 @@ class NOAAClient:
             logger.error(f"X-Ray Data Error: {e}")
             return None
     
+    async def get_goes_xray_flux(self) -> Optional[Dict[str, Any]]:
+        """
+        Get latest GOES X-Ray Flux data with 2-minute cache
+        
+        Returns:
+            Dictionary with time_tag, flux, flare_class, and satellite
+        """
+        cache_key = "goes_xray_flux"
+        
+        # Try cache first
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            logger.debug("Using cached GOES X-Ray flux data")
+            return cached_data
+        
+        url = "https://services.swpc.noaa.gov/json/goes/primary/xrays-1-day.json"
+        try:
+            data = await self.fetch_json(url)
+            
+            if not data or not isinstance(data, list):
+                logger.warning("Invalid GOES X-Ray flux data")
+                return None
+            
+            # Filter for 0.1-0.8nm band (Long channel)
+            long_channel = [d for d in data if d.get('energy') == '0.1-0.8nm']
+            if not long_channel:
+                logger.warning("No long channel data found in GOES X-Ray flux")
+                return None
+            
+            # Get the latest measurement
+            latest = long_channel[-1]
+            flux = latest.get('flux', 0)
+            
+            # Convert flux to flare class
+            # >= 1e-4 → X
+            # >= 1e-5 → M
+            # >= 1e-6 → C
+            # >= 1e-7 → B
+            # < 1e-7 → A
+            if flux >= 1e-4:
+                class_letter = "X"
+                class_value = round(flux / 1e-4, 1)
+            elif flux >= 1e-5:
+                class_letter = "M"
+                class_value = round(flux / 1e-5, 1)
+            elif flux >= 1e-6:
+                class_letter = "C"
+                class_value = round(flux / 1e-6, 1)
+            elif flux >= 1e-7:
+                class_letter = "B"
+                class_value = round(flux / 1e-7, 1)
+            else:
+                class_letter = "A"
+                class_value = round(flux / 1e-8, 1)
+            
+            flare_class = f"{class_letter}{class_value}"
+            
+            result = {
+                "time_tag": latest.get('time_tag'),
+                "flux": flux,
+                "flare_class": flare_class,
+                "satellite": latest.get('satellite')
+            }
+            
+            # Cache with 2-minute TTL
+            from datetime import timedelta
+            cache.set(cache_key, result, timedelta(minutes=2))
+            logger.info(f"Fetched and cached GOES X-Ray flux: {flare_class}")
+            
+            return result
+        except Exception as e:
+            logger.error(f"GOES X-Ray flux error: {e}")
+            return None
+    
     async def fetch_json(self, url: str) -> Optional[List[Dict[str, Any]]]:
         """
         Fetch JSON data from URL (async wrapper for http_client)
@@ -245,6 +319,51 @@ class NOAAClient:
         except Exception as e:
             logger.error(f"Failed to fetch JSON from {url}: {e}")
             return None
+    
+    def get_solar_wind_data(self) -> Dict[str, Optional[float]]:
+        """
+        Get solar wind speed and density data
+        
+        Returns:
+            Dictionary with speed and density
+        """
+        return {
+            "speed": self.get_current_solar_wind(),
+            "density": self.get_current_density()
+        }
+    
+    def get_mag_field_data(self) -> Dict[str, Optional[float]]:
+        """
+        Get magnetic field data (Bz)
+        
+        Returns:
+            Dictionary with bz value
+        """
+        return {
+            "bz": self.get_current_bz()
+        }
+    
+    def get_proton_flux(self) -> Dict[str, Optional[float]]:
+        """
+        Get proton flux data (currently returns density as proxy)
+        
+        Returns:
+            Dictionary with flux value
+        """
+        return {
+            "flux": self.get_current_density()
+        }
+    
+    def get_realtime_kp(self) -> Dict[str, Optional[float]]:
+        """
+        Get realtime Kp index
+        
+        Returns:
+            Dictionary with kp value
+        """
+        return {
+            "kp": self.get_current_kp()
+        }
 
 
 # Global NOAA client instance
