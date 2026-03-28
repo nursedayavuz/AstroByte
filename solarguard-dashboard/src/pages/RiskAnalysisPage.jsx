@@ -11,6 +11,7 @@ export default function RiskAnalysisPage({ groundAssets = [] }) {
   const t = createTranslator(settings.language)
   const [selectedAsset, setSelectedAsset] = useState(null)
   const [historicalScenarios, setHistoricalScenarios] = useState([])
+  const [mapScale, setMapScale] = useState(1)
 
   useEffect(() => {
     if (!settings.backendEnabled) {
@@ -30,33 +31,68 @@ export default function RiskAnalysisPage({ groundAssets = [] }) {
     >
       <div className="flex-1 flex flex-col gap-4">
         {/* Turkey Map */}
-        <div className="glass-card p-5 relative" style={{ minHeight: 400 }}>
-          <div style={{ fontSize: 11, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: 12, fontWeight: 700 }}>
-            {t('TÜRKİYE KRİTİK ALTYAPI RİSK HARİTASI', 'TURKEY CRITICAL INFRASTRUCTURE RISK MAP')}
-          </div>
-          <div style={{ position: 'relative', height: 320, border: '1px solid var(--border-subtle)', borderRadius: 8, overflow: 'hidden', background: 'rgba(5,10,20,0.4)' }}>
-            
-            {/* Detailed Turkey Map Background */}
-            <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
-              <TurkeyMap color="var(--cyan)" opacity={0.3} />
+        <div className="glass-card flex flex-col relative" style={{ flex: 1, minHeight: 500, overflow: 'hidden' }}>
+          <div className="p-4 flex items-center justify-between border-b" style={{ borderColor: 'var(--border-subtle)', background: 'rgba(0,0,0,0.4)', zIndex: 20 }}>
+            <div style={{ fontSize: 13, color: 'var(--cyan)', textTransform: 'uppercase', letterSpacing: '0.15em', fontWeight: 800 }}>
+              {t('TÜRKİYE KRİTİK ALTYAPI RİSK HARİTASI', 'TURKEY CRITICAL INFRASTRUCTURE RISK MAP')}
             </div>
-            <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(rgba(0,255,240,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,240,0.03) 1px, transparent 1px)', backgroundSize: '50px 50px', zIndex: 0 }} />
 
-            {/* Asset markers */}
-            {groundAssets.map(asset => {
-              const color = getRiskColor(asset.level)
-              
-              // Jitter to prevent overlapping entities
-              let jitterX = 0; let jitterY = 0;
-              if (asset.id === "tubitak-ank") { jitterX = 2; jitterY = 3.5; }
-              if (asset.id === "tedas-ank") { jitterX = -1.5; jitterY = -2; }
-              if (asset.id === "turksat-gc") { jitterX = -4.5; jitterY = 3.5; }
+            {/* Zoom Controls */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setMapScale(s => Math.max(0.5, s - 0.25))}
+                className="flex items-center justify-center rounded"
+                style={{ width: 28, height: 28, background: 'var(--surface-light)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>remove</span>
+              </button>
+              <button
+                onClick={() => setMapScale(1)}
+                className="flex items-center justify-center rounded font-data"
+                style={{ width: 44, height: 28, background: 'var(--surface-light)', border: '1px solid var(--border-subtle)', color: 'var(--cyan)', fontSize: 11 }}
+              >
+                {(mapScale * 100).toFixed(0)}%
+              </button>
+              <button
+                onClick={() => setMapScale(s => Math.min(3, s + 0.25))}
+                className="flex items-center justify-center rounded"
+                style={{ width: 28, height: 28, background: 'var(--surface-light)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
+              </button>
+            </div>
+          </div>
 
-              // Accurate coordinate mapping for 1000x422 SVG
-              // Lon range ~26-45 -> X range ~80-930
-              // Lat range ~36-42 -> Y range ~340-50
-              const x = ((88 + (asset.lon - 26.5) * 46.8) / 1000) * 100 + jitterX
-              const y = ((81 + (41.6 - asset.lat) * 52.9) / 422) * 100 + jitterY
+          <div style={{ flex: 1, position: 'relative', overflow: 'hidden', background: 'rgba(5,10,20,0.6)', cursor: 'grab' }}>
+            <motion.div
+              drag
+              dragConstraints={{ left: -1000 * mapScale + 500, right: 1000 * mapScale - 500, top: -400 * mapScale + 200, bottom: 400 * mapScale - 200 }}
+              dragElastic={0.1}
+              animate={{ scale: mapScale }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              style={{ width: '100%', height: '100%', position: 'relative', originX: 0.5, originY: 0.5 }}
+            >
+              {/* Detailed Turkey Map Background */}
+              <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
+                <TurkeyMap color="var(--cyan)" opacity={0.35} />
+              </div>
+              <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(rgba(0,255,240,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,240,0.03) 1px, transparent 1px)', backgroundSize: '50px 50px', zIndex: 0 }} />
+
+              {/* Asset markers */}
+              {groundAssets.map(asset => {
+                const color = getRiskColor(asset.level)
+                
+                // Base mathematical projection fallback
+                let x = ((88 + (asset.lon - 26.5) * 46.8) / 1000) * 100
+                let y = ((81 + (41.6 - asset.lat) * 52.9) / 422) * 100
+
+                // Precise visual calibration for known critical assets on the 1000x422 SVG
+                if (asset.name.includes("İstanbul")) { x = 20.5; y = 21.3; }
+                if (asset.name.includes("İzmir")) { x = 12.0; y = 53.3; }
+                if (asset.name.includes("Ankara Hub")) { x = 35.5; y = 40.5; }
+                if (asset.name.includes("Gölbaşı")) { x = 38.5; y = 44.5; }
+                if (asset.name.includes("TÜBİTAK")) { x = 32.5; y = 36.5; }
+
               const dotSize = 8 + (asset.criticality || 0.5) * 8
               const isSelected = selectedAsset?.id === asset.id
 
@@ -73,9 +109,10 @@ export default function RiskAnalysisPage({ groundAssets = [] }) {
                     position: 'absolute',
                     left: `${x}%`,
                     top: `${y}%`,
-                    transform: 'translate(-50%, -50%)',
+                    transform: `translate(-50%, -50%) scale(${1 / Math.max(1, Math.sqrt(mapScale))})`,
                     zIndex: isSelected ? 10 : 2,
                     display: 'flex',
+
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -130,6 +167,7 @@ export default function RiskAnalysisPage({ groundAssets = [] }) {
                 </div>
               )
             })}
+            </motion.div>
           </div>
         </div>
 
@@ -155,7 +193,7 @@ export default function RiskAnalysisPage({ groundAssets = [] }) {
       </div>
 
       {/* Right Panel: Asset Details OR General Info */}
-      <div className="flex flex-col gap-4" style={{ width: 300 }}>
+      <div className="flex flex-col gap-4" style={{ width: 340 }}>
         <AnimatePresence mode="wait">
           {selectedAsset ? (
             <motion.div
@@ -204,6 +242,41 @@ export default function RiskAnalysisPage({ groundAssets = [] }) {
                   </>
                 )}
               </ul>
+
+              {/* POST-EVENT MITIGATION LOGIC FRAMEWORK */}
+              <div className="mt-5 p-4" style={{ background: 'var(--surface-light)', borderRadius: 8, border: `1px dashed ${getRiskColor(selectedAsset.level)}` }}>
+                <div style={{ fontSize: 10, color: 'var(--text-primary)', textTransform: 'uppercase', marginBottom: 8, fontWeight: 800, letterSpacing: '0.05em' }}>
+                  {t('Gelişmiş Olay Sonrası Eylem Planı', 'Post-Event Action Framework')}
+                </div>
+                {selectedAsset.level === 'RED' ? (
+                  <ul className="flex flex-col gap-2" style={{ fontSize: 10, color: 'var(--text-secondary)', listStyle: 'none', padding: 0 }}>
+                    <li className="flex items-start gap-2">
+                      <span className="material-symbols-outlined" style={{ fontSize: 14, color: 'var(--red)' }}>error</span>
+                      <span>Sistem tamamen izole modda çalıştırılmalı. Kademeli onarım prosedürünü başlatın.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="material-symbols-outlined" style={{ fontSize: 14, color: 'var(--orange)' }}>speed</span>
+                      <span>GIC ve RF dalgalanmaları normale dönene kadar şebeke yükünü %40 azaltın.</span>
+                    </li>
+                  </ul>
+                ) : selectedAsset.level === 'ORANGE' ? (
+                  <ul className="flex flex-col gap-2" style={{ fontSize: 10, color: 'var(--text-secondary)', listStyle: 'none', padding: 0 }}>
+                    <li className="flex items-start gap-2">
+                      <span className="material-symbols-outlined" style={{ fontSize: 14, color: 'var(--amber)' }}>warning</span>
+                      <span>Sistemlerdeki reaktif güç limitörlerini aktive edin, manuel izlemeye geçin.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="material-symbols-outlined" style={{ fontSize: 14, color: 'var(--cyan)' }}>history</span>
+                      <span>Telemetri/Veri yedeklerini anlık olarak uzak sunuculara senkronize edin.</span>
+                    </li>
+                  </ul>
+                ) : (
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                    Risk seviyesi eşik değerinin altında. Standart operasyon ve olağan veri izleme süreçleri sürdürülmektedir. İletici düzey kurtarma planı bekliyor.
+                  </div>
+                )}
+              </div>
+
             </motion.div>
           ) : (
             <motion.div key="general-info" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
