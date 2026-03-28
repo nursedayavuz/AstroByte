@@ -78,52 +78,7 @@ export default function GlobeControls({ toggles, onToggle, swarmFilter = 'ALL', 
       
 
 
-      {/* SATELLITE SWARM & TIME CONTROLS */}
-      <div className="flex gap-2 justify-center items-center" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 6 }}>
-        <span style={{ fontSize: 9, color: 'var(--text-dim)', textTransform: 'uppercase' }}>{t('FİLTRE:', 'FILTER:')}</span>
-        {swarmFilters.map(sf => (
-          <button
-            key={sf.key}
-            onClick={() => onSwarmFilterChange?.(sf.key)}
-            style={{
-              background: swarmFilter === sf.key ? 'var(--cyan-glow)' : 'transparent',
-              color: swarmFilter === sf.key ? 'var(--cyan)' : 'var(--text-muted)',
-              border: `1px solid ${swarmFilter === sf.key ? 'var(--cyan)' : 'transparent'}`,
-              borderRadius: 4,
-              padding: '2px 6px',
-              fontSize: 9,
-              cursor: 'pointer',
-              fontFamily: "'Space Mono', monospace",
-            }}
-          >
-            {sf.label}
-          </button>
-        ))}
-
-        <div style={{ width: 1, height: 12, background: 'var(--border-subtle)', margin: '0 4px' }} />
-        
-        <span style={{ fontSize: 9, color: 'var(--text-dim)', textTransform: 'uppercase' }}>{t('ZAMAN:', 'TIME:')}</span>
-        {[1, 100].map(tm => (
-          <button
-            key={tm}
-            onClick={() => onTimeMultiplierChange?.(tm)}
-            style={{
-              background: timeMultiplier === tm ? 'var(--red-glow)' : 'transparent',
-              color: timeMultiplier === tm ? 'var(--red)' : 'var(--text-muted)',
-              border: `1px solid ${timeMultiplier === tm ? 'var(--red)' : 'transparent'}`,
-              borderRadius: 4,
-              padding: '2px 6px',
-              fontSize: 9,
-              cursor: 'pointer',
-              fontWeight: 700,
-              fontFamily: "'Space Mono', monospace",
-            }}
-            title={tm === 1 ? 'Gerçek Zamanlı (1x)' : 'Hızlandırılmış (100x)'}
-          >
-            {tm}x
-          </button>
-        ))}
-      </div>
+      {/* UI Panels specifically regarding filtering have been removed as the dashboard now monitors a unified fleet */}
     </div>
   )
 }
