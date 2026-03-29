@@ -20,7 +20,7 @@ class GlobeErrorBoundary extends React.Component {
   }
 }
 
-export default function DashboardPage({ satellites, groundAssets, alertState, forecastSeries, eventLog }) {
+export default function DashboardPage({ satellites, groundAssets, alertState, forecastSeries, eventLog, actionRecommendations }) {
   const { settings } = useSettings()
   const t = createTranslator(settings.language)
   
@@ -56,6 +56,15 @@ export default function DashboardPage({ satellites, groundAssets, alertState, fo
   }
 
   const threat = getThreatInfo(alertState.kp_current)
+  const decisionTopActions = actionRecommendations?.top_actions || []
+  const decisionSituation = actionRecommendations?.situation || {}
+
+  const getSeverityColor = (severity) => {
+    if (severity === 'CRITICAL') return 'var(--red)'
+    if (severity === 'HIGH') return '#ffaa00'
+    if (severity === 'MEDIUM') return '#ffee00'
+    return 'var(--cyan)'
+  }
 
   return (
     <motion.div
@@ -135,7 +144,7 @@ export default function DashboardPage({ satellites, groundAssets, alertState, fo
       </div>
 
       {/* Right Panel — Kp Chart + Event Log only */}
-      <div className="dashboard-right-panel">
+      <div className="dashboard-right-panel" style={{ overflowY: 'auto' }}>
         <div>
           <div style={{ fontSize: 10, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: 8 }}>
             {t('Kp TAHMİN GRAFİĞİ', 'Kp FORECAST CHART')}
@@ -192,6 +201,55 @@ export default function DashboardPage({ satellites, groundAssets, alertState, fo
                 ? 'Kritik uyarı: L1/L2 bantlarında ciddi sinyal kayıpları ve iyonosferik sintilasyon. İHA ve otonom tarım sistemlerinde %40 rota sapması riski.' 
                 : 'Sintilasyon seviyesi normal bant aralığında. Sinyal kilitlenmesi stabil.'}
             </div>
+          </div>
+        </div>
+
+        {/* Decision Center */}
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontSize: 10, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: 8 }}>
+            {t('KARAR MERKEZI (24-72 SAAT)', 'DECISION CENTER (24-72 HOURS)')}
+          </div>
+          <div className="glass-card p-3 flex flex-col gap-2" style={{ background: 'rgba(10, 25, 45, 0.45)', border: '1px solid var(--border-medium)' }}>
+            <div className="flex items-center justify-between" style={{ fontSize: 11 }}>
+              <span style={{ color: 'var(--text-muted)' }}>
+                KP: <span className="font-data" style={{ color: 'var(--text-primary)' }}>
+                  {decisionSituation.kp_index != null ? Number(decisionSituation.kp_index).toFixed(1) : '-'}
+                </span>
+              </span>
+              <span style={{ color: 'var(--text-muted)' }}>
+                FLARE: <span className="font-data" style={{ color: 'var(--text-primary)' }}>
+                  {decisionSituation.flare_class || '-'}
+                </span>
+              </span>
+              <span style={{ color: 'var(--text-muted)' }}>
+                P(M+): <span className="font-data" style={{ color: 'var(--text-primary)' }}>
+                  {decisionSituation.prob_mx_event_24h != null ? `${Math.round(Number(decisionSituation.prob_mx_event_24h) * 100)}%` : '-'}
+                </span>
+              </span>
+            </div>
+
+            {decisionTopActions.length === 0 && (
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                Henüz aksiyon listesi yok. Backend baglantisi saglandiginda kritik aksiyonlar burada listelenir.
+              </div>
+            )}
+
+            {decisionTopActions.slice(0, 3).map((item, index) => (
+              <div key={`${item.asset}-${index}`} style={{ padding: '8px 10px', border: '1px solid var(--border-subtle)', borderRadius: 8, background: 'rgba(0,0,0,0.25)' }}>
+                <div className="flex items-center justify-between" style={{ marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)' }}>{item.asset}</span>
+                  <span className="font-data" style={{ fontSize: 11, fontWeight: 800, color: getSeverityColor(item.severity) }}>
+                    {item.severity} | {item.priority_score}
+                  </span>
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                  {item.action}
+                </div>
+                <div style={{ marginTop: 4, fontSize: 10, color: 'var(--text-dim)' }}>
+                  {t('Aksiyon penceresi', 'Action window')}: <span className="font-data" style={{ color: 'var(--text-primary)' }}>{item.window}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 

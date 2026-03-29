@@ -76,6 +76,7 @@ function AppContent() {
                 alertState={data.alertState}
                 forecastSeries={data.forecastSeries}
                 eventLog={data.eventLog}
+                actionRecommendations={data.actionRecommendations}
               />
             } />
             <Route path="/solar-flares" element={

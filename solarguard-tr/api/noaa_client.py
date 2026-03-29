@@ -7,6 +7,7 @@ import logging
 import math
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
+import numpy as np
 
 from .config import config
 from .http_client import http_client, HTTPClientError
@@ -94,6 +95,78 @@ class NOAAClient:
             except (IndexError, ValueError, TypeError):
                 pass
         return 0.0
+
+    def get_latest_kp_observation(self) -> Dict[str, Any]:
+        """
+        Return latest observed Kp with observation timestamp.
+        NOAA planetary K index is typically updated in 3-hour cadence.
+        """
+        kp_data = self.get_kp_index()
+        if kp_data and isinstance(kp_data, list):
+            for row in reversed(kp_data):
+                if not isinstance(row, list) or len(row) < 2:
+                    continue
+                try:
+                    kp_val = float(row[1])
+                    time_tag = row[0]
+                    return {
+                        "kp_index": kp_val,
+                        "observation_time_utc": time_tag,
+                        "source": "NOAA SWPC planetary-k-index",
+                        "cadence_minutes": 180,
+                        "is_realtime_estimate": False,
+                    }
+                except (ValueError, TypeError):
+                    continue
+
+        return {
+            "kp_index": 0.0,
+            "observation_time_utc": None,
+            "source": "NOAA SWPC planetary-k-index",
+            "cadence_minutes": 180,
+            "is_realtime_estimate": False,
+        }
+
+    def get_kp_nowcast_estimate(self) -> Dict[str, Any]:
+        """
+        Build a minute-level Kp nowcast estimate from latest solar wind telemetry.
+        This is a heuristic operational estimate, not an official NOAA Kp observation.
+        """
+        kp_obs = self.get_latest_kp_observation()
+        kp_base = float(kp_obs.get("kp_index") or 0.0)
+
+        sw_speed = float(self.get_current_solar_wind() or 400.0)
+        bz = float(self.get_current_bz() or 0.0)
+        density = float(self.get_current_density() or 5.0)
+        proton_flux = float(self.get_proton_flux().get("flux") or 0.0)
+
+        # Normalize major drivers.
+        speed_term = np.clip((sw_speed - 380.0) / 500.0, -0.4, 1.0) * 1.8
+        bz_term = np.clip((-bz) / 20.0, -0.4, 1.0) * 2.1
+        density_term = np.clip((density - 5.0) / 25.0, -0.3, 0.8) * 0.7
+        proton_term = np.clip(np.log10(max(proton_flux, 1.0)) / 6.0, 0.0, 1.0) * 0.4
+
+        kp_nowcast = kp_base + speed_term + bz_term + density_term + proton_term
+        kp_nowcast = float(np.clip(kp_nowcast, 0.0, 9.0))
+
+        confidence = float(
+            np.clip(
+                0.45
+                + abs(np.clip((-bz) / 20.0, 0.0, 1.0)) * 0.25
+                + np.clip((sw_speed - 380.0) / 700.0, 0.0, 1.0) * 0.20
+                + np.clip((density - 5.0) / 35.0, 0.0, 1.0) * 0.10,
+                0.35,
+                0.95,
+            )
+        )
+
+        return {
+            "kp_nowcast": round(kp_nowcast, 2),
+            "confidence": round(confidence, 2),
+            "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "is_warning": bool(kp_nowcast > 5.0),
+            "method": "telemetry_nowcast_v1",
+        }
     
     def get_current_solar_wind(self) -> Optional[float]:
         """Get current solar wind speed in km/s"""

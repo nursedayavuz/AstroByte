@@ -8,6 +8,7 @@ Version: 4.0.0 (Complete Rewrite)
 """
 import sys
 import requests
+import re
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional
@@ -221,6 +222,45 @@ async def get_telemetry_summary():
         return {"status": "error", "message": str(e)}
 
 
+@app.get("/api/realtime-kp")
+def get_realtime_kp():
+    """
+    Real-time sync endpoint for UI clocks + latest observed Kp.
+    Note: NOAA planetary Kp is typically refreshed in 3-hour cadence.
+    """
+    try:
+        kp_obs = noaa_client.get_latest_kp_observation()
+        kp_nowcast = noaa_client.get_kp_nowcast_estimate()
+        return {
+            "server_time_utc": datetime.now(timezone.utc).isoformat(),
+            "kp_index": kp_obs.get("kp_index"),
+            "observation_time_utc": kp_obs.get("observation_time_utc"),
+            "source": kp_obs.get("source"),
+            "cadence_minutes": kp_obs.get("cadence_minutes"),
+            "is_realtime_estimate": kp_obs.get("is_realtime_estimate"),
+            "kp_nowcast": kp_nowcast.get("kp_nowcast"),
+            "nowcast_generated_at_utc": kp_nowcast.get("generated_at_utc"),
+            "nowcast_confidence": kp_nowcast.get("confidence"),
+            "nowcast_is_warning": kp_nowcast.get("is_warning"),
+            "nowcast_method": kp_nowcast.get("method"),
+        }
+    except Exception as e:
+        logger.error(f"Error fetching realtime Kp: {e}")
+        return {
+            "server_time_utc": datetime.now(timezone.utc).isoformat(),
+            "kp_index": None,
+            "observation_time_utc": None,
+            "source": "NOAA SWPC planetary-k-index",
+            "cadence_minutes": 180,
+            "is_realtime_estimate": False,
+            "kp_nowcast": None,
+            "nowcast_generated_at_utc": None,
+            "nowcast_confidence": None,
+            "nowcast_is_warning": False,
+            "nowcast_method": "telemetry_nowcast_v1",
+        }
+
+
 # ============================================================================
 # NASA DONKI Data Endpoints
 # ============================================================================
@@ -411,6 +451,158 @@ def get_turkish_asset_risk(
             "satellite_risks": {},
             "ground_risks": {},
             "prob_mx_event": 0.0
+        }
+
+
+def _flare_class_to_numeric(flare_class: Optional[str]) -> float:
+    """
+    Convert flare class strings like X1.2 / M5.6 into a numeric scale.
+    A=1, B=2, C=3, M=4, X=5 (+ magnitude contribution).
+    """
+    if not flare_class:
+        return 1.0
+
+    m = re.match(r"^\s*([ABCMX])\s*([0-9]*\.?[0-9]+)?\s*$", str(flare_class).upper())
+    if not m:
+        return 1.0
+
+    letter = m.group(1)
+    magnitude = float(m.group(2) or 1.0)
+    base = {"A": 1.0, "B": 2.0, "C": 3.0, "M": 4.0, "X": 5.0}.get(letter, 1.0)
+    return min(9.0, base + (magnitude / 10.0))
+
+
+def _severity_from_priority(priority: int) -> str:
+    if priority >= 80:
+        return "CRITICAL"
+    if priority >= 60:
+        return "HIGH"
+    if priority >= 40:
+        return "MEDIUM"
+    return "LOW"
+
+
+def _window_from_priority(priority: int) -> str:
+    if priority >= 80:
+        return "T-1h"
+    if priority >= 60:
+        return "T-6h"
+    return "T-12h"
+
+
+def _build_asset_action(asset_name: str, info: dict, domain: str) -> tuple[str, str]:
+    risk_type = str(info.get("risk_type", "")).lower()
+    asset_type = str(info.get("type", "")).lower()
+
+    if domain == "satellite" and risk_type == "surface_charging":
+        return (
+            "Safe mode hazirliklari yap, yuksek guc tuketimli yukleri gecici kisitla ve telemetri sikligini artir.",
+            "Surface charging nedeniyle gecici subsystem resetleri ve baglanti kesintisi gorulebilir.",
+        )
+    if domain == "satellite" and risk_type == "atmospheric_drag":
+        return (
+            "Yorunge/drag butcesini guncelle, maneuver penceresini acik tut ve gorev planini sadeleştir.",
+            "LEO drag artisi konum hatasi ve gorev zamanlama sapmasi yaratabilir.",
+        )
+    if asset_type == "power_grid":
+        return (
+            "Yuk dengeleme planini aktif et, kritik trafolari yakin izle ve reaktif guc rezervini artir.",
+            "GIC etkisiyle trafo zorlanmasi ve bolgesel kesinti riski artar.",
+        )
+    if asset_type == "satellite_control":
+        return (
+            "Yedek uplink/downlink hattini hazir tut, komut pencerelerini kisalt ve operatorde 7/24 nobet uygula.",
+            "TT&C kesintisi komut gecikmesine ve operasyonel kontrol kaybina yol acabilir.",
+        )
+    return (
+        "Operasyon izleme frekansini artir, alarm esiklerini gecici olarak sikilastir ve yedek proseduru hazir tut.",
+        "Erken onlem alinmazsa servis kalitesinde dalgalanma ve gecikme artisi beklenir.",
+    )
+
+
+@app.get("/api/action-recommendations")
+async def get_action_recommendations():
+    """
+    Decision support endpoint:
+    Converts current space weather + per-asset risk into ranked operational actions.
+    """
+    try:
+        kp = noaa_client.get_current_kp()
+        kp = float(kp) if kp is not None else 3.0
+
+        goes = await noaa_client.get_goes_xray_flux()
+        flare_class = (goes or {}).get("flare_class", "A1.0")
+        flare_numeric = _flare_class_to_numeric(flare_class)
+
+        prob_mx = min(max(kp / 10.0, 0.0), 0.99)
+        report = generate_turkish_risk_report(
+            kp_forecast_24h=kp,
+            flr_class_forecast=flare_numeric,
+            prob_mx_event=prob_mx,
+        )
+
+        kp_factor = min(max(kp / 9.0, 0.0), 1.0)
+        risk_items = []
+
+        for asset_name, info in report.get("satellite_risks", {}).items():
+            risk_items.append(("satellite", asset_name, info))
+        for asset_name, info in report.get("ground_risks", {}).items():
+            risk_items.append(("ground", asset_name, info))
+
+        actions = []
+        for domain, asset_name, info in risk_items:
+            risk_score = float(info.get("risk_score", 0.0))
+            base_priority = ((risk_score * 0.65) + (kp_factor * 0.20) + (prob_mx * 0.15)) * 100.0
+            if str(flare_class).upper().startswith("X"):
+                base_priority += 10.0
+            elif str(flare_class).upper().startswith("M"):
+                base_priority += 5.0
+
+            priority = int(max(1, min(100, round(base_priority))))
+            action_text, impact_text = _build_asset_action(asset_name, info, domain)
+
+            actions.append({
+                "asset": asset_name,
+                "domain": domain,
+                "risk_score": round(risk_score, 3),
+                "priority_score": priority,
+                "severity": _severity_from_priority(priority),
+                "window": _window_from_priority(priority),
+                "action": action_text,
+                "if_not_done": impact_text,
+            })
+
+        actions = sorted(actions, key=lambda x: x["priority_score"], reverse=True)
+        top_actions = actions[:5]
+
+        return {
+            "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "situation": {
+                "kp_index": round(kp, 2),
+                "flare_class": flare_class,
+                "prob_mx_event_24h": round(prob_mx, 3),
+                "composite_alert_level": report.get("composite_alert_level", "GREEN"),
+            },
+            "operational_window": top_actions[0]["window"] if top_actions else "T-12h",
+            "top_actions": top_actions,
+            "summary": {
+                "critical_count": len([a for a in top_actions if a["severity"] == "CRITICAL"]),
+                "high_count": len([a for a in top_actions if a["severity"] == "HIGH"]),
+            },
+        }
+    except Exception as e:
+        logger.error(f"Error generating action recommendations: {e}")
+        return {
+            "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "situation": {
+                "kp_index": None,
+                "flare_class": None,
+                "prob_mx_event_24h": None,
+                "composite_alert_level": "GREEN",
+            },
+            "operational_window": "T-12h",
+            "top_actions": [],
+            "summary": {"critical_count": 0, "high_count": 0},
         }
 
 

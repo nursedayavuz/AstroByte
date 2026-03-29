@@ -64,6 +64,7 @@ export function useApiData(backendEnabled = true) {
         fetch(`${API_BASE}/latest-flare`).then(r => r.ok ? r.json() : null).catch(() => null),
         fetch(`${API_BASE}/goes-xray`).then(r => r.ok ? r.json() : null).catch(() => null),
         fetch(`${API_BASE}/telemetry-summary`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`${API_BASE}/action-recommendations`).then(r => r.ok ? r.json() : null).catch(() => null),
       ])
 
       // ★ POST-FLIGHT CHECK: If backend was disabled while we were fetching, discard results
@@ -73,7 +74,7 @@ export function useApiData(backendEnabled = true) {
         return
       }
       
-      const [risk, forecast, history, metrics, flares, storms, notifications, shocks, wsaEnlil, rbe, latestFlare, goesXray, telemetrySummary] = responses
+      const [risk, forecast, history, metrics, flares, storms, notifications, shocks, wsaEnlil, rbe, latestFlare, goesXray, telemetrySummary, actionRecommendations] = responses
       const hasValidForecast = Array.isArray(forecast) && forecast.length > 0
       
       // If ANY core data exists, consider it a successful fetch.
@@ -95,7 +96,8 @@ export function useApiData(backendEnabled = true) {
            rbe: rbe || prev?.rbe,
            latestFlare: latestFlare || prev?.latestFlare,
            goesXray: goesXray || prev?.goesXray,
-           telemetrySummary: telemetrySummary || prev?.telemetrySummary
+           telemetrySummary: telemetrySummary || prev?.telemetrySummary,
+           actionRecommendations: actionRecommendations || prev?.actionRecommendations
         }))
         setIsLive(true)
         setLastUpdate(new Date())
@@ -277,6 +279,7 @@ export function useApiData(backendEnabled = true) {
     shocks: data?.shocks || [],
     wsaEnlil: data?.wsaEnlil || [],
     radiationBelts: data?.rbe || [],
+    actionRecommendations: data?.actionRecommendations || null,
     compositeAlertLevel,
   }
 }
