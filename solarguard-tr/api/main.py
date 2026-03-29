@@ -1,5 +1,5 @@
-"""
-SolarGuard-TR — FastAPI Backend (Clean Modular Architecture)
+﻿"""
+SolarGuard-TR â€” FastAPI Backend (Clean Modular Architecture)
 ============================================================
 Serves endpoints consumed by the Stitch Dashboard.
 NO MOCK DATA. Uses Real NOAA SWPC and NASA DONKI APIs.
@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI(
     title="SolarGuard-TR API",
-    description="Güneş Fırtınası Erken Uyarı Sistemi — Backend (Real Data NO-MOCK)",
+    description="GÃ¼neÅŸ FÄ±rtÄ±nasÄ± Erken UyarÄ± Sistemi â€” Backend (Real Data NO-MOCK)",
     version="4.0.0",
 )
 
@@ -112,7 +112,7 @@ def get_space_weather_history():
 
 
 @app.get("/api/forecast-series")
-def get_forecast_series():
+async def get_forecast_series():
     """
     Get Kp forecast series with ML-style predictions
     
@@ -124,6 +124,22 @@ def get_forecast_series():
     except Exception as e:
         logger.error(f"Error processing forecast series: {e}")
         return []
+
+@app.get("/api/aurora-activity")
+def get_aurora_activity():
+    """
+    Get aurora visibility and intensity inferred from realtime Kp.
+    """
+    try:
+        return data_processor.get_aurora_activity()
+    except Exception as e:
+        logger.error(f"Error processing aurora activity: {e}")
+        return {
+            "north_visible": False,
+            "south_visible": False,
+            "intensity": 0.0,
+            "kp": 0.0,
+        }
 
 
 @app.get("/api/model-metrics")
@@ -159,7 +175,7 @@ async def read_latest_flare():
     """
     data = await noaa_client.get_latest_xray_flux()
     if not data:
-        raise HTTPException(status_code=503, detail="Veri kaynağına ulaşılamıyor")
+        raise HTTPException(status_code=503, detail="Veri kaynaÄŸÄ±na ulaÅŸÄ±lamÄ±yor")
     return data
 
 
@@ -173,7 +189,7 @@ async def read_goes_xray_flux():
     """
     data = await noaa_client.get_goes_xray_flux()
     if not data:
-        raise HTTPException(status_code=503, detail="GOES X-Ray verisine ulaşılamıyor")
+        raise HTTPException(status_code=503, detail="GOES X-Ray verisine ulaÅŸÄ±lamÄ±yor")
     return data
 
 
@@ -508,22 +524,22 @@ def get_historical_scenarios():
         {
             "id": 'quebec',
             "year": '1989',
-            "name": 'Quebec Karartması',
-            "desc": 'Kp=9. 9 saat elektrik kesintisi. GIC (Geomanyetik İndüklenen Akım) sebebiyle trafolar yandı.',
+            "name": 'Quebec KarartmasÄ±',
+            "desc": 'Kp=9. 9 saat elektrik kesintisi. GIC (Geomanyetik Ä°ndÃ¼klenen AkÄ±m) sebebiyle trafolar yandÄ±.',
             "color": 'var(--red)'
         },
         {
             "id": 'halloween',
             "year": '2003',
-            "name": 'Halloween Fırtınaları',
-            "desc": 'X28+ Flare. NASA uyduları güvenli moda alındı, uçuş rotaları değiştirildi.',
+            "name": 'Halloween FÄ±rtÄ±nalarÄ±',
+            "desc": 'X28+ Flare. NASA uydularÄ± gÃ¼venli moda alÄ±ndÄ±, uÃ§uÅŸ rotalarÄ± deÄŸiÅŸtirildi.',
             "color": 'var(--amber)'
         },
         {
             "id": 'may2024',
             "year": '2024',
-            "name": 'Mayıs G5 Fırtınası',
-            "desc": "Son 20 yılın en güçlüsü. Tarım GPS sistemleri koptu, auroralar Türkiye'den izlendi.",
+            "name": 'MayÄ±s G5 FÄ±rtÄ±nasÄ±',
+            "desc": "Son 20 yÄ±lÄ±n en gÃ¼Ã§lÃ¼sÃ¼. TarÄ±m GPS sistemleri koptu, auroralar TÃ¼rkiye'den izlendi.",
             "color": 'var(--cyan)'
         }
     ]
@@ -545,15 +561,14 @@ async def trigger_webhook(request: Request):
         data = await request.json()
     except Exception:
         data = {}
-    
+
     logger.info(f"Webhook triggered with payload: {data}")
     return {
         "status": "success",
         "dispatched": True,
         "payload": data,
-        "message": "Alan uzmanlarına bildirim gönderildi (G3+ Olayı)."
+        "message": "Alan uzmanlarÄ±na bildirim gÃ¶nderildi (G3+ OlayÄ±)."
     }
-
 
 # ============================================================================
 # Application Startup

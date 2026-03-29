@@ -6,6 +6,27 @@ import { useSettings } from '../contexts/SettingsContext'
 import { createTranslator } from '../utils/translations'
 import TurkeyMap from '../components/maps/TurkeyMap'
 
+const TURKEY_BOUNDS = {
+  minLon: 26.0,
+  maxLon: 45.0,
+  minLat: 35.8,
+  maxLat: 42.2,
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value))
+}
+
+function projectToTurkeyMap(lat, lon) {
+  const safeLat = clamp(Number(lat), TURKEY_BOUNDS.minLat, TURKEY_BOUNDS.maxLat)
+  const safeLon = clamp(Number(lon), TURKEY_BOUNDS.minLon, TURKEY_BOUNDS.maxLon)
+
+  const x = ((safeLon - TURKEY_BOUNDS.minLon) / (TURKEY_BOUNDS.maxLon - TURKEY_BOUNDS.minLon)) * 100
+  const y = ((TURKEY_BOUNDS.maxLat - safeLat) / (TURKEY_BOUNDS.maxLat - TURKEY_BOUNDS.minLat)) * 100
+
+  return { x: clamp(x, 0, 100), y: clamp(y, 0, 100) }
+}
+
 export default function RiskAnalysisPage({ groundAssets = [] }) {
   const { settings } = useSettings()
   const t = createTranslator(settings.language)
@@ -82,16 +103,10 @@ export default function RiskAnalysisPage({ groundAssets = [] }) {
               {groundAssets.map(asset => {
                 const color = getRiskColor(asset.level)
                 
-                // Base mathematical projection fallback
-                let x = ((88 + (asset.lon - 26.5) * 46.8) / 1000) * 100
-                let y = ((81 + (41.6 - asset.lat) * 52.9) / 422) * 100
 
-                // Precise visual calibration for known critical assets on the 1000x422 SVG
-                if (asset.name.includes("İstanbul")) { x = 20.5; y = 21.3; }
-                if (asset.name.includes("İzmir")) { x = 12.0; y = 53.3; }
-                if (asset.name.includes("Ankara Hub")) { x = 35.5; y = 40.5; }
-                if (asset.name.includes("Gölbaşı")) { x = 38.5; y = 44.5; }
-                if (asset.name.includes("TÜBİTAK")) { x = 32.5; y = 36.5; }
+                const { x, y } = projectToTurkeyMap(asset.lat, asset.lon)
+
+
 
                 const dotSize = 8 + (asset.criticality || 0.5) * 8
                 const isSelected = selectedAsset?.id === asset.id

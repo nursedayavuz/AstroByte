@@ -3,13 +3,41 @@ SolarGuard-TR API Configuration
 ================================
 Centralized configuration management
 """
+import os
 from datetime import timedelta
+from pathlib import Path
+
+
+def _load_dotenv() -> None:
+    """
+    Minimal .env loader without external dependency.
+    Looks for .env in project root and solarguard-tr folder.
+    """
+    candidate_paths = [
+        Path(__file__).resolve().parents[2] / ".env",  # /astrobyte/.env
+        Path(__file__).resolve().parents[1] / ".env",  # /astrobyte/solarguard-tr/.env
+    ]
+
+    for env_path in candidate_paths:
+        if not env_path.exists():
+            continue
+        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            os.environ.setdefault(key, value)
+
+
+_load_dotenv()
 
 class Config:
     """Application configuration"""
     
     # API Keys
-    NASA_API_KEY = "imOU58mnc7apZc1HtuFRxbWdC40A9ujWVj2KI132"
+    NASA_API_KEY = os.getenv("NASA_API_KEY", "DEMO_KEY")
     
     # API Endpoints
     DONKI_BASE = "https://api.nasa.gov/DONKI"

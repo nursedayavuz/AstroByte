@@ -10,6 +10,15 @@ node_modules/
 dist/
 build/
 .env
+.env.*
+**/.env
+!.env.example
+
+# ML/Data artifacts
+*.keras
+daily_*.csv
+archive.zip
+uvicorn*.log
 
 # Python caches
 __pycache__/

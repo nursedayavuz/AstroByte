@@ -32,7 +32,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-NASA_API_KEY = "imOU58mnc7apZc1HtuFRxbWdC40A9ujWVj2KI132"
+NASA_API_KEY = "DEMO_KEY"
 DONKI_BASE = "https://api.nasa.gov/DONKI"
 NOAA_BASE = "https://services.swpc.noaa.gov"
 

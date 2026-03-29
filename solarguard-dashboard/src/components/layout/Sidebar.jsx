@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { NAV_ITEMS } from '../../utils/constants'
 import MetricCard from '../cards/MetricCard'
@@ -122,38 +122,6 @@ export default function Sidebar({ alertState }) {
             </NavLink>
           ))}
         </nav>
-
-        {/* AI Commander — Predictive Analysis HUD */}
-        <div className="px-4 pb-2 mt-auto">
-          <div className="p-3" style={{ background: 'linear-gradient(135deg, rgba(0,255,240,0.05) 0%, rgba(0,0,0,0.4) 100%)', border: '1px solid var(--border-accent)', borderTopWidth: 2, borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined" style={{ fontSize: 16, color: 'var(--cyan)' }}>smart_toy</span>
-                <span className="font-data" style={{ fontSize: 10, color: 'var(--cyan)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                  {t('AI KOMUTAN', 'AI COMMANDER')}
-                </span>
-              </div>
-              <div style={{ 
-                width: 6, height: 6, borderRadius: '50%', 
-                background: alertState?.ai_status ? 'var(--cyan)' : 'var(--text-muted)', 
-                boxShadow: alertState?.ai_status ? '0 0 8px var(--cyan)' : 'none', 
-                animation: alertState?.ai_status ? 'pulse-cyan 2s infinite' : 'none' 
-              }} />
-            </div>
-            
-            <div className="flex justify-between items-center bg-black/40 rounded px-2 py-1 mb-1 border border-white/5">
-              <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>{t('Sistem Durumu', 'System Status')}</span>
-              <span className="font-data" style={{ fontSize: 10, color: alertState?.ai_status ? 'var(--cyan)' : 'var(--text-muted)', fontWeight: 700 }}>
-                {alertState?.ai_status ?? t('BEKLENİYOR', 'AWAITING')}
-              </span>
-            </div>
-            <div className="flex justify-between items-center bg-black/40 rounded px-2 py-1 border border-white/5">
-              <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>{t('24S Zirve Kp', '24H Peak Kp')}</span>
-              <span className="font-data" style={{ fontSize: 10, color: 'var(--amber)', fontWeight: 700 }}>{alertState?.ai_peak_kp ?? '-'} <span style={{fontSize:8, color:'var(--text-muted)'}}>(Tahmin)</span></span>
-            </div>
-            <div style={{ fontSize: 8, color: 'var(--text-dim)', marginTop: 6, textAlign: 'center', opacity: 0.7 }}>Time-Series LLM (Zero-Shot) — Güven: %{alertState?.ai_confidence ?? '-'}</div>
-          </div>
-        </div>
 
         {/* Bottom Quick Stats — Pushed completely into the bottom edge space */}
         <div className="px-4 pb-0 pt-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>

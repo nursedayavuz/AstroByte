@@ -46,10 +46,19 @@ export default function PredictionsPage({ forecastSeries = [], alertState = {}, 
     { label: '72 SAAT', prob: alertState?.prob_mx_72h || 0, color: 'var(--amber)' },
   ]
 
+  const asNumber = (v, fallback = 0) => {
+    if (typeof v === 'number' && Number.isFinite(v)) return v
+    if (typeof v === 'string') {
+      const parsed = Number(v.replace('%', '').trim())
+      if (Number.isFinite(parsed)) return v.includes('%') ? parsed / 100 : parsed
+    }
+    return fallback
+  }
+
   const metrics = [
-    { name: 'AUC-ROC', persistence: baselines.persistence_auc || 0, xgb: xgb.auc_roc || 0, lstm: lstm.auc_roc || 0 },
-    { name: 'Precision', persistence: 0, xgb: xgb.feature_importance?.Bz_GSM || 0.35, lstm: lstm.precision_24h || 0 },
-    { name: 'F1-Score', persistence: 0, xgb: 0.72, lstm: lstm.precision_24h ? lstm.precision_24h * 0.95 : 0 },
+    { name: 'AUC-ROC', persistence: asNumber(baselines.persistence_auc), xgb: asNumber(xgb.auc_roc), lstm: asNumber(lstm.auc_roc) },
+    { name: 'Precision', persistence: 0, xgb: asNumber(xgb.feature_importance?.Bz_GSM, 0.35), lstm: asNumber(lstm.precision_24h) },
+    { name: 'F1-Score', persistence: 0, xgb: 0.72, lstm: asNumber(lstm.precision_24h) > 0 ? asNumber(lstm.precision_24h) * 0.95 : 0 },
   ]
 
   return (

@@ -54,6 +54,7 @@ export default function KpForecastChart({ data = [], height = 200, showLegend = 
         <Area type="monotone" dataKey="kp_upper_ci" stroke="none" fill="rgba(0,255,240,0.08)" stackId="conf" name="Üst Güven" />
         <Area type="monotone" dataKey="kp_lower_ci" stroke="none" fill="var(--bg-void)" stackId="conf" name="Alt Güven" />
 
+        <Line type="monotone" dataKey="kp_noaa" stroke="#4da3ff" strokeWidth={1.5} strokeDasharray="4 4" dot={false} name="NOAA" />
         <Line type="monotone" dataKey="kp_lstm" stroke="var(--chart-lstm)" strokeWidth={2.5} dot={false} name="LSTM" />
         <Line type="monotone" dataKey="kp_xgb" stroke="var(--chart-xgb)" strokeWidth={1.5} strokeDasharray="5 3" dot={false} name="XGBoost" />
         <Line type="monotone" dataKey="kp_baseline" stroke="var(--chart-baseline)" strokeWidth={1} strokeDasharray="2 2" dot={false} name="Baseline" />

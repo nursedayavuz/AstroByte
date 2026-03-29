@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+﻿import { useNavigate } from 'react-router-dom'
 import { useClock } from '../../hooks/useClock'
 import AlertBadge from '../cards/AlertBadge'
 import StatusDot from '../shared/StatusDot'

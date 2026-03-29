@@ -81,10 +81,11 @@ function AuroraCurtain({ latitude, color, baseOpacity = 0.5, width = 0.015, heig
 }
 
 export default function AuroraRings({ kpIndex = 6, visible = true }) {
-  if (!visible || kpIndex < 5) return null
+  if (!visible || kpIndex <= 0) return null
 
-  // Higher Kp index = brighter and thicker auroras
-  const intensityMultiplier = Math.min((kpIndex - 4) * 0.4, 2.5)
+  // Keep a faint baseline glow so "Aurora" toggle always has visible feedback.
+  // Kp >= 5 still appears significantly brighter.
+  const intensityMultiplier = Math.max(0.15, Math.min((kpIndex - 2.5) * 0.35, 2.5))
 
   return (
     <group>

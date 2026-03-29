@@ -2,6 +2,26 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 
 const API_BASE = '/api'
 
+const GROUND_COORD_FALLBACKS = {
+  tedas_istanbul_hub: { lat: 41.3, lon: 28.6 },
+  tedas_izmir_hub: { lat: 38.4192, lon: 27.1287 },
+  turksat_golbasi_ttc: { lat: 39.5, lon: 32.8028 },
+}
+
+function normalizeAssetKey(name = '') {
+  return String(name)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase()
+}
+
+function toFiniteNumber(value) {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
 function sampleData(arr, maxPoints = 72) {
   if (!arr || arr.length <= maxPoints) return arr
   const step = Math.ceil(arr.length / maxPoints)
@@ -54,6 +74,7 @@ export function useApiData(backendEnabled = true) {
       }
       
       const [risk, forecast, history, metrics, flares, storms, notifications, shocks, wsaEnlil, rbe, latestFlare, goesXray, telemetrySummary] = responses
+      const hasValidForecast = Array.isArray(forecast) && forecast.length > 0
       
       // If ANY core data exists, consider it a successful fetch.
       // Previously, minor API timeouts caused the entire dashboard to go blank.
@@ -63,7 +84,7 @@ export function useApiData(backendEnabled = true) {
         // Merge the current valid data with any previous data to avoid flickering on transient nulls
         setData(prev => ({
            risk: risk || prev?.risk,
-           forecast: forecast || prev?.forecast,
+           forecast: hasValidForecast ? forecast : (prev?.forecast || []),
            history: history || prev?.history,
            metrics: metrics || prev?.metrics,
            flares: flares || prev?.flares,
@@ -132,11 +153,16 @@ export function useApiData(backendEnabled = true) {
   function mergeGroundAssets(apiRisks) {
     if (!apiRisks || typeof apiRisks !== 'object') return []
     return Object.entries(apiRisks).map(([name, info]) => {
+      const key = normalizeAssetKey(name)
+      const fallback = GROUND_COORD_FALLBACKS[key]
+      const lat = toFiniteNumber(info?.lat) ?? fallback?.lat ?? 39.0
+      const lon = toFiniteNumber(info?.lon) ?? fallback?.lon ?? 32.0
+
       return {
         id: name.replace(/[\s-]/g, '_').toLowerCase(),
         name: name.replace(/_/g, ' '),
-        lat: info.lat ?? 39.0,
-        lon: info.lon ?? 32.0,
+        lat,
+        lon,
         risk: info.risk_score ?? 0,
         level: info.alert_level || 'GREEN',
         type: info.type || 'power_grid',
@@ -149,9 +175,10 @@ export function useApiData(backendEnabled = true) {
     if (!apiForecast || !Array.isArray(apiForecast)) return []
     return apiForecast.map((p, i) => ({
       hour: p.hour ?? i,
+      kp_noaa: p.kp_noaa ?? p.kp_baseline ?? p.kp_lstm ?? 0,
       kp_lstm: p.kp_lstm ?? p.kp_lower_ci ?? 0,
       kp_xgb: p.kp_xgb ?? p.kp_lstm ?? 0,
-      kp_baseline: p.kp_baseline ?? 0,
+      kp_baseline: p.kp_baseline ?? p.kp_noaa ?? 0,
       kp_lower_ci: p.kp_lower_ci ?? p.kp_lower ?? 0,
       kp_upper_ci: p.kp_upper_ci ?? p.upper ?? 0,
     }))
