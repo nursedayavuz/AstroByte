@@ -1,0 +1,232 @@
+﻿Table view
+"Test ID","Test Category","Component Under Test","Test Scenario Description","Test Steps","Expected Result","Actual Result","Test Data Requirements","Prerequisites","Priority","Automation Status","Test Environment","Execution Frequency","Owner"
+"TC-001","Integration Test","SDO Ingestor","Handle SDO HTTP 503 with failover and backfill","1) curl -I https://sdo.gsfc.nasa.gov/data/ returns 503
+2) Update endpoint in /etc/ingest/sdo.yaml to mirror and kubectl rollout restart deploy/sdo-ingestor
+3) Run ingest-backfill --source=sdo --from -6h
+4) Monitor throughput_msgs_per_sec & stream_processing_lag_ms","Lag <120s within 10m; backfill completes; no data loss; metrics stable","pending","SDO 503 simulation; mirror endpoint available","K8s access; mirror credentials; Kafka up","Critical","Automated","Staging","Pre-release","Ingestion SRE"
+"TC-002","Unit Test","Kafka Producer","Idempotent production prevents duplicates","1) Configure acks=all, enable.idempotence=true
+2) Produce 1000 keyed messages to raw-telemetry while forcing retries
+3) Consume with kcat and count unique keys","Exactly-once semantics; duplicates=0; kafka_consumer_lag stable","pending","Synthetic keyed message set","Kafka cluster reachable","High","Automated","Dev","On commit","Platform SRE"
+"TC-003","Integration Test","Kafka Topic (raw-telemetry)","Detect and deduplicate duplicate messages in consumer","1) Inject duplicates to topic
+2) Run consumer with key-based dedup and compaction
+3) Verify output count via Spark/Flink sink","Output unique count equals source unique; lag remains <120s","pending","Duplicate batch","Consumer supports dedup","High","Automated","Staging","Daily","Platform SRE"
+"TC-004","Performance Test","Streaming Pipeline","Validate stream lag SLA under load","1) Produce 5k msgs/sec for 10 min to raw-telemetry
+2) Monitor stream_processing_lag_ms
+3) Autoscale: kubectl scale deploy/feature-extractor
+4) Verify lag","Lag stays <120000 ms; throughput_msgs_per_sec >=5000","pending","Load generator","HPA enabled; partitions >=8","Critical","Automated","Production-like","Pre-release","Platform SRE"
+"TC-005","Chaos Test","Network (Ingest↔Kafka)","Network partition between ingestors and Kafka","1) Apply Calico policy to block broker
+2) Observe errors ERR-1025; metrics throughput drop
+3) Rollback network policy","Events pause; alerts fired; recovery within 5m after rollback; no data corruption","pending","Cluster with Calico","Chaos tooling; rollback plan","Critical","Manual","Staging","Pre-release","Platform SRE"
+"TC-006","Integration Test","DSCOVR Ingestor","Handle upstream 429 with backoff and retry budget","1) Configure MAX_QPS=5 via kubectl set env deploy/dscovr-ingestor
+2) Simulate 429
+3) Verify token-bucket behavior and lag","Rate stabilizes; api_rate_limit_hits observed; lag <120s after throttle","pending","Simulated 429 responses","Ingress policies configured","High","Automated","Staging","Daily","Ingestion SRE"
+"TC-007","Integration Test","ACE Ingestor","ACE feed timeout handling and backfill","1) Simulate >30s timeout
+2) Verify retries with jitter
+3) Trigger ingest-backfill --source=ace --from -2h","No crash; frames cached; lag recovers <120s; ERR-1002 logged","pending","Timeout proxy","Backfill tool installed","High","Automated","Staging","Weekly","Ingestion SRE"
+"TC-008","Integration Test","GOES Ingestor","CORS and preflight success via API gateway","1) Attempt cross-origin fetch
+2) Validate CORS headers after gateway config update","Preflight succeeds; no ERR-1030; api_5xx_rate unaffected","pending","Partner origin list","Gateway reachable","Medium","Automated","Dev","On commit","API Eng"
+"TC-009","Unit Test","Coordinate Transformer","HEEQ→GSM conversion guards against NaN","1) Feed edge vectors (zeros, extremes) into transformer
+2) Assert no NaN; clamp inputs","No NaN; errors count 0; raises on invalid","pending","Synthetic vectors","Unit test framework","High","Automated","Dev","On commit","Data Engineering"
+"TC-010","Integration Test","Data Quality Validator","Missing fields <2% threshold enforcement","1) Stream batch with 5% missing fields
+2) Validator drops/flags batch
+3) Monitor data_quality_score","Alert raised (ERR-1050); <2% accepted; others quarantined","pending","Corrupted dataset","Validation service running","High","Automated","Staging","Daily","Data Engineering"
+"TC-011","Integration Test","Spark/Flink Job","Exactly-once sinks with checkpointing via Redis","1) Start Flink with checkpointing to Redis
+2) Force Redis failover yielding READONLY error
+3) Verify writers switch to master via Sentinel","Job continues after brief pause; no data loss; ERR-1013 handled","pending","Redis Sentinel cluster","Flink job configured","High","Automated","Staging","Pre-release","Platform SRE"
+"TC-012","Performance Test","TimescaleDB","Query performance SLA <15s over hypertables","1) Run representative queries
+2) Measure timescaledb_query_duration_ms
+3) Add index if needed","All P95 queries <15000 ms; no timeouts","pending","Telemetry dataset","DB warmed; index present","Critical","Automated","Production-like","Pre-release","DBA"
+"TC-013","Chaos Test","TimescaleDB Storage","Disk space exhaustion and recovery","1) Fill disk until /var/lib/postgresql nearly full
+2) Observe ERR-1010
+3) pg_archivecleanup; vacuum; expand PV patch
+4) Verify writes resume","Writes fail then recover; no data loss; alerts fire","pending","Fill script","Backups functional","Critical","Manual","Staging","Pre-release","DBA"
+"TC-014","Integration Test","Pgbouncer","Connection pool exhaustion handling","1) Set low max_client_conn
+2) Run load to exhaust
+3) Kill idle conns; increase pool","New queries succeed after remediation; proper 5xx limits","pending","Load script","Pgbouncer configured","High","Manual","Staging","Pre-release","DBA"
+"TC-015","Performance Test","Read Replica","Replication lag <60s under read load","1) Run heavy reads
+2) Monitor read replica lag metric
+3) Throttle queries","Lag stays <60s; alerts at >60s","pending","Read-intensive queries","Replica configured","High","Automated","Staging","Weekly","DBA"
+"TC-016","Security Test","JWT Auth","Token expiry and refresh flow","1) Call /forecast with expired JWT
+2) Expect 401
+3) Use refresh token; retry","401 on expired; success on refresh; ERR-1016 only on first","pending","Expired and valid tokens","Auth service running","High","Automated","Staging","Daily","API Eng"
+"TC-017","Security Test","JWT Verification","JWKS rotation and signature validation","1) Rotate keys
+2) Ensure gateway JWKS cache refresh
+3) Call endpoint","Requests succeed post-rotate; no false rejects; ERR-1049 absent","pending","JWKS endpoints","Cache TTL tuned","Medium","Automated","Staging","Pre-release","API Eng"
+"TC-018","Performance Test","API Gateway","Rate limiting per-key enforcement","1) Send burst 200 rps with single key to /forecast
+2) Observe 429s
+3) Whitelist partner limit and retest","Leaky-bucket enforces quotas; 429 rate consistent; api_rate_limit_hits increased","pending","Load via hey/ab","Gateway deployed","High","Automated","Staging","Daily","API Eng"
+"TC-019","Performance Test","API Gateway","Response time SLA under normal load","1) 100 rps mixed GETs
+2) Measure P95 latency","P95 <300ms; 5xx rate <1%","pending","Synthetic traffic","Upstream healthy","High","Automated","Production-like","Pre-release","API Eng"
+"TC-020","Integration Test","Cache Layer","Cache invalidation on model update","1) Deploy new model via MLflow; send cache bust event
+2) PURGE /forecast key
+3) Verify new responses","No stale responses; no ERR-1022; cache_hit_ratio stable","pending","Model versions","Event bus wiring","Medium","Automated","Staging","Daily","API Eng"
+"TC-021","Integration Test","Webhook Delivery","TLS handshake validation and fallback","1) Post alert to client webhook with expired cert
+2) Expect TLS error (ERR-1009) and DLQ
+3) Retry after cert update","Initial fails to DLQ; successful retry within SLA","pending","Expired and valid cert endpoints","Alert worker & DLQ","High","Automated","Staging","Daily","Notification Eng"
+"TC-022","Performance Test","Alert Delivery","Webhook delivery latency SLA","1) Send 100 alerts to local webhook
+2) Measure webhook_delivery_latency_ms","P95 <5000 ms; timeout errors <1%","pending","Alert generator","Network stable","High","Automated","Staging","Daily","Notification Eng"
+"TC-023","Integration Test","Email Alerts","SMTP quota exceeded failover","1) Simulate 550 quota exceeded
+2) Reroute to secondary provider via secret patch
+3) Verify delivery","Failover succeeds; queue drains; ERR-1023 recorded","pending","Primary/secondary SMTP creds","Notifier supports failover","High","Manual","Staging","Pre-release","Notification Eng"
+"TC-024","Integration Test","Push Notifications","FCM/APNS outage routing to backup channel","1) Simulate 503 from FCM
+2) Route to email/SMS
+3) Ensure alerts delivered","Backup channel used; queue depth stable; ERR-1031","pending","Simulated 503","Multi-channel config","Medium","Partial","Staging","Weekly","Notification Eng"
+"TC-025","Unit Test","Alert Threshold Logic","Kp/Dst thresholds trigger correct severity","1) Feed synthetic Kp sequence (Kp=6)
+2) Evaluate rules","Correct severity mapped; no false positives","pending","Synthetic indices","Rule engine available","High","Automated","Dev","On commit","Data Science"
+"TC-026","Integration Test","Feature Store","Schema validation prevents inference crash","1) Deploy feature-engineering STRICT_MODE=true
+2) Send record with missing field
+3) Verify null guards","Record rejected with clear error; no crash; ERR-1020 prevented","pending","Malformed record","Service reachable","High","Automated","Staging","Daily","ML Ops"
+"TC-027","Performance Test","LSTM Inference","Latency and throughput under CPU limits","1) kubectl set resources deploy/lstm-infer --limits=cpu=1
+2) Send 200 req/min
+3) Measure model_inference_latency_ms","P95 <200ms target; if throttled, alert ERR-1048 then increase limits to recover","pending","Inference requests payloads","GPU/CPU nodes available","High","Automated","Staging","Pre-release","ML Ops"
+"TC-028","Integration Test","LSTM Inference","Schema-model compatibility on deploy","1) Deploy new LSTM model incompatible schema
+2) Expect ERR-1006
+3) Rollback via mlflow models serve -m models:/lstm/Production@prev","Service restored post-rollback; errors drop to 0","pending","Incompatible artifact","MLflow registry online","Critical","Manual","Staging","Pre-release","ML Ops"
+"TC-029","Chaos Test","GPU Nodes","Handle CUDA OOM in ViT","1) Send large batch to ViT until OOM
+2) Auto reduce MAX_BATCH=8; restart deploy/vit-infer","Service recovers; model_inference_errors_total spikes then normal","pending","High-res images","GPU nodes w/ nvidia-smi","High","Partial","Staging","Pre-release","ML Ops"
+"TC-030","Chaos Test","GPU Drivers","Driver mismatch crashloops","1) Upgrade node image with mismatched driver
+2) Observe ERR-1017
+3) Install matching driver and uncordon","Pods recover; svc_availability_pct restored","pending","GPU node pool","Privileged ops allowed","Critical","Manual","Staging","Pre-release","Platform SRE"
+"TC-031","Unit Test","Image Processing","OpenCV worker deadlock watchdog","1) Simulate OpenCV deadlock
+2) Verify watchdog restarts workers","No pipeline stall; ERR-1028 avoided","pending","Test images","Process pool patch applied","Medium","Automated","Dev","On commit","ML Ops"
+"TC-032","Performance Test","ViT/ResNet/U-Net","Image model inference accuracy batch","1) Run validation set through models
+2) Compute AUC/TSS/HSS","AUC >0.7 for prod; report TSS/HSS; alert if below","pending","Labeled image set","Metrics computation tooling","High","Automated","Staging","Weekly","Data Science"
+"TC-033","Integration Test","PINNs","Physics-informed model inference correctness","1) Feed known CME parameters
+2) Compare predicted dynamics RMSE","RMSE within configured threshold (e.g., <0.2 normalized)","pending","Benchmark cases","Model deployed","Medium","Manual","Staging","Weekly","Data Science"
+"TC-034","Integration Test","XGBoost Ensemble","Consensus and disagreement alert","1) Feed differing model outputs
+2) Ensure ensemble weighted mode
+3) Trigger disagreement > threshold","Ensemble selects consensus; ERR-1026 produced when divergence high","pending","Synthetic logits","Ensemble toggles available","High","Automated","Staging","Daily","ML Ops"
+"TC-035","End-to-End Test","Forecast Pipeline","CME arrival time estimation E2E","1) Backfill historical CME events
+2) Run pipeline to estimate arrival times
+3) Compute MAE","MAE within agreed SLA (e.g., <10 hours); results stored","pending","CME catalog and ground truth","Backfill tooling","High","Manual","Production-like","Pre-release","Data Science"
+"TC-036","Performance Test","TimescaleDB Compression","Compression job not blocking writers","1) Trigger compression
+2) Monitor query durations","No query timeouts; compression within maintenance window","pending","Large hypertable","Job configured","Medium","Automated","Staging","Weekly","DBA"
+"TC-037","Chaos Test","Kafka Broker","Broker failure and producer failover","1) Stop one broker
+2) Producers update bootstrap list
+3) Verify throughput","Throughput drop <20%; recovery within 2m; ERR-1040 logged","pending","Multi-broker cluster","Clients have multiple bootstrap servers","High","Manual","Staging","Pre-release","Platform SRE"
+"TC-038","Chaos Test","Redis","Writer mispointed to replica read-only error","1) Force failover
+2) Writers see READONLY error
+3) Update via Sentinel
+4) Verify checkpoints persist","Pipeline resumes; no data loss; ERR-1013 cleared","pending","Redis cluster","Apps respect Sentinel","High","Manual","Staging","Pre-release","Platform SRE"
+"TC-039","Integration Test","TimescaleDB Locks","Deadlock detection and retry logic","1) Start two conflicting updates
+2) Observe ERR-1041
+3) Apply retries","Transactions succeed after retry; no manual kill required","pending","Test table","DB access","Medium","Automated","Dev","On commit","DBA"
+"TC-040","Performance Test","Autovacuum","Autovacuum tuning prevents bloat","1) Increase write rate
+2) Monitor timescaledb_query_duration_ms
+3) Tune autovacuum params","Query p95 stays <15s; no ERR-1029","pending","Write generator","DB tuning rights","Medium","Manual","Staging","Weekly","DBA"
+"TC-041","Security Test","API Gateway CORS","Validate allowed origins list","1) Preflight from partner
+2) Ensure Access-Control-Allow-Origin includes partner","No CORS failures; ERR-1030 absent","pending","Partner domain","Gateway configmap","Low","Automated","Dev","On commit","API Eng"
+"TC-042","Integration Test","API Health Checks","/healthz and /readyz dependency checks","1) Drop dependency (DB) and hit /healthz,/readyz
+2) Verify readiness fails, health reflects degraded","No false 200; ERR-1043 resolved","pending","Toggleable dependency","Configured probes","Low","Automated","Staging","Weekly","API Eng"
+"TC-043","Performance Test","Dashboard Rendering","Grafana dashboard import and render speed","1) grafana-cli dashboards import
+2) Measure time to first paint","Render <2s; no JSON parse errors","pending","Dashboard JSON","Grafana accessible","Low","Automated","Dev","On commit","Observability"
+"TC-044","Integration Test","Prometheus","Scrape success rate >95%","1) Misconfigure auth header then fix
+2) promtool check
+3) Verify scrape success","Scrape_success >95%; ERR-1011 gone","pending","Metrics endpoints","Prometheus up","Medium","Automated","Staging","Daily","Observability"
+"TC-045","Chaos Test","Prometheus TSDB","Out-of-space and recovery","1) Reduce retention to fill quickly
+2) Observe ERR-1032
+3) Increase PV and prune","Scrapes resume; metrics backfilled if possible","pending","TSDB storage","Cluster storage ops","High","Manual","Staging","Pre-release","Observability"
+"TC-046","Integration Test","Alertmanager","Silence extension during incidents","1) Create silence then let expire
+2) Verify alerts resume; extend via API","Proper silence lifecycle; ERR-1046 only if not extended","pending","Alert rules","Alertmanager API access","Low","Manual","Staging","Weekly","Observability"
+"TC-047","End-to-End Test","Backfill","Historical data backfill without breaking SLAs","1) Run ingest-backfill for -24h
+2) Ensure streaming lag for realtime stays <120s","Realtime unaffected; backfill completes","pending","Historical dataset","Separate backfill consumers","High","Automated","Staging","Pre-release","Ingestion SRE"
+"TC-048","Security Test","Penetration Testing","OWASP baseline on API gateway","1) Run zap-baseline against /api
+2) Validate 5xx <1%
+3) Check auth bypass","No critical vulns; rate limits hold; no data leakage","pending","ZAP tool","Staging endpoint exposed","High","Manual","Staging","Pre-release","Security"
+"TC-049","Integration Test","Cache Layer","Cache fallback on upstream 502","1) Force upstream inference 502 (ERR-1036)
+2) Verify gateway serves stale-if-error within TTL","Clients receive cached responses; svc_availability_pct stable","pending","Cache key TTLs","Upstream failure injection","Medium","Manual","Staging","Weekly","API Eng"
+"TC-050","Performance Test","Kafka Consumers","Lag autoscaling via HPA","1) Increase lag by producing burst
+2) Verify HPA scales deploy/telemetry-consumer to 6","kafka_consumer_lag decreases; lag <120s","pending","Load generator","HPA configured","High","Automated","Staging","Daily","Platform SRE"
+"TC-051","Integration Test","Coordinate Transform + Feature Eng","Division-by-zero guard","1) Feed vector that would cause div/0
+2) Verify clamp & fallback","No NaN; ERR-1035 avoided; data_quality_score unaffected","pending","Edge-case vectors","Service running","Medium","Automated","Dev","On commit","Data Engineering"
+"TC-052","End-to-End Test","Forecast Validation","Kp and Dst accuracy metrics","1) Run week of predictions vs truth
+2) Compute TSS/HSS/RMSE","TSS/HSS above baselines; RMSE within range","pending","Ground truth indices","Metrics computation","High","Manual","Production-like","Pre-release","Data Science"
+"TC-053","Performance Test","Model Drift Monitoring","Detect AUC drop <0.7 and trigger retrain","1) Feed drifted data
+2) Verify accuracy_7d_avg <0.7 triggers alert ERR-1012
+3) Start Airflow retrain DAG","Alert raised; DAG runs; fallback ensemble enabled","pending","Drifted feature set","Airflow access","High","Automated","Staging","Daily","ML Ops"
+"TC-054","Integration Test","Airflow Retraining","Dependency resolution in DAG","1) Remove scikit-image
+2) Run DAG; expect ERR-1042
+3) Install and rerun","DAG succeeds after fix; new model registered","pending","Airflow env","Package repo access","Medium","Manual","Staging","Weekly","ML Ops"
+"TC-055","Chaos Test","Node Failures","K8s node crash and pod rescheduling","1) Cordon+drain node running inference
+2) Verify reschedule time and availability","svc_availability_pct dip <1%; recovery <2m","pending","Cluster with spare capacity","RBAC to drain","High","Manual","Staging","Pre-release","Platform SRE"
+"TC-056","Integration Test","Circuit Breakers","Exponential backoff on upstream timeouts","1) Configure breaker
+2) Simulate 30% timeout rate
+3) Observe retry patterns","Breaker trips; reduces upstream load; recovery when healthy","pending","Fault injection","Breaker library configured","Medium","Automated","Staging","Weekly","Platform SRE"
+"TC-057","Security Test","TLS","mTLS with client webhooks","1) Configure mutual TLS
+2) Post alerts and verify cert validation","Only trusted clients accepted; failures to DLQ","pending","CA bundle; client certs","Notifier supports mTLS","High","Manual","Staging","Pre-release","Notification Eng"
+"TC-058","Integration Test","Model Registry","Registry outage fallback cache","1) Simulate HTTP 503 from registry
+2) Use cached artifacts REGISTRY_READ_ONLY=true","Deploys continue with cache; ERR-1039 logged","pending","Cached models","Fallback toggles","Critical","Manual","Staging","Pre-release","ML Ops"
+"TC-059","Performance Test","CPU/Memory","Memory leak detection in ML pipeline","1) Run inference for 30m
+2) Track memory_rss_bytes
+3) Ensure torch.no_grad()","No upward memory trend >10%; ERR-1033 not triggered","pending","Stable input stream","Profilers installed","High","Automated","Staging","Weekly","ML Ops"
+"TC-060","Integration Test","API Gateway→Inference","Gateway 502 recovery with retries","1) Kill upstream pod
+2) Verify gateway retries/backoff
+3) Restore pod","Transient 502 only; fast recovery; ERR-1036 observed then clears","pending","Upstream service","Retry policy configured","High","Automated","Staging","Daily","API Eng"
+"TC-061","Performance Test","TimescaleDB Indexing","Verify index improves slow query","1) Run slow query >15s
+2) CREATE INDEX CONCURRENTLY ON telemetry (instrument_id, time DESC)
+3) Re-run query","New p95 <5s; no timeouts; ERR-1005 cleared","pending","Large telemetry table","DDL perms","Medium","Manual","Staging","Pre-release","DBA"
+"TC-062","Integration Test","WAL-G Backups","Backup job success and restore test","1) Run wal-g backup-push
+2) Delete small table
+3) Restore and verify","Backup succeeds; restore accurate; ERR-1047 not present","pending","S3 bucket","IAM permissions","Critical","Manual","Staging","Weekly","DBA"
+"TC-063","Chaos Test","Network Latency","Introduce 5% packet loss to webhook egress","1) tc qdisc add netem loss 5%
+2) Send alerts
+3) Remove qdisc","Delivery remains <5s P95 or retries+DLQ; ERR-1038 as needed","pending","tc access","Isolated test namespace","Medium","Manual","Staging","Pre-release","Observability"
+"TC-064","End-to-End Test","Multi-Region","Consistency of forecasts across regions","1) Compare predictions from region A and B
+2) Validate data replication and feature parity","Differences < epsilon; svc_availability_pct unaffected","pending","Two regions active","Traffic splitter","High","Manual","Production-like","Pre-release","Platform SRE"
+"TC-065","Performance Test","Kafka Retry Topic","Verify dscovr-retry drains correctly","1) Populate dscovr-retry
+2) Reset offsets --to-latest and execute
+3) Measure drain time","Queue drains within target; no message loss","pending","Retry topic messages","rdkafka tools","Medium","Manual","Staging","Weekly","Platform SRE"
+"TC-066","Integration Test","DLQ Replay","Replay failed alert deliveries","1) alert-dlq-replay --batch 1000
+2) Verify deliveries and dedup","DLQ depth reduces to 0; no duplicates","pending","DLQ records","Notifier access","Medium","Automated","Staging","Daily","Notification Eng"
+"TC-067","Security Test","SQL","Prevent long-running malicious queries","1) Run heavy query loop
+2) Verify statement_timeout and kill behavior","Timeout enforced at 15s; resources protected","pending","Query script","DB params set","Medium","Automated","Staging","Weekly","DBA"
+"TC-068","Unit Test","Kafka Serialization","Schema evolution compatibility","1) Produce with new schema version
+2) Consumer validates via schema registry","Backward-compatible; rejects breaking change","pending","Avro/JSON schema files","Schema registry","Medium","Automated","Dev","On commit","Platform SRE"
+"TC-069","Integration Test","CME Catalog Enrichment","Timeout handling and cache","1) Simulate CME API >20s
+2) Verify retry and cached response","Enrichment succeeds via cache; ERR-1027 logged","pending","Cache with recent entries","Network stable","Medium","Automated","Staging","Weekly","Ingestion SRE"
+"TC-070","Performance Test","Kafka→Spark/Flink","Throughput and backpressure","1) Increase partitions to 8
+2) Run 10k msgs/sec for 10 min
+3) Monitor lag","Lag stays <120s after scaling; cpu_utilization_pct <85%","pending","Load generator","Autoscaling enabled","Critical","Automated","Production-like","Pre-release","Platform SRE"
+"TC-071","Integration Test","Cache Purge Hook","CI/CD hook triggers purge on model deploy","1) Deploy new model
+2) Verify CI pipeline calls PURGE endpoint","Cache invalidated within 60s of deploy","pending","CI pipeline","Purge endpoint accessible","Medium","Automated","Staging","On commit","API Eng"
+"TC-072","Chaos Test","DNS","DNS outage for upstream services","1) Break CoreDNS for inference svc
+2) Verify retries/backoff then recovery","Short disruption; automatic recovery; no data corruption","pending","Cluster DNS control","Rollback plan","Medium","Manual","Staging","Pre-release","Platform SRE"
+"TC-073","Performance Test","Webhook Rate","Notifier throughput at 100 rps","1) Send 6k alerts over 60s
+2) Measure success rate and latency",">99% success; P95 <5s; queue depth returns to baseline","pending","Bulk alert payloads","Notifier scaled","High","Automated","Production-like","Pre-release","Notification Eng"
+"TC-074","Integration Test","CORS Regression","Automated tests for CORS routes","1) Run suite hitting OPTIONS and GET for key routes","All pass; headers correct","pending","CORS test list","Gateway online","Low","Automated","Dev","On commit","API Eng"
+"TC-075","Chaos Test","Circuit Breaker","Breaker prevents retry storm on DSCOVR","1) Force 429 storm
+2) Observe breaker open and half-open","Reduced outbound; recovery after cool-down","pending","Fault injector","Breaker configured","High","Automated","Staging","Weekly","Ingestion SRE"
+"TC-076","Integration Test","Read Routing","Analytics to read replica when lag <60s","1) Execute read-only queries via router
+2) Increase lag >60s and verify failback to primary","Automatic routing adjusts; no stale data","pending","Router config","Replica metrics available","Medium","Manual","Staging","Weekly","DBA"
+"TC-077","Performance Test","Model Ensemble API","Ensemble endpoint latency","1) Call /ensemble 200 rps
+2) Measure p95","P95 <400ms; 5xx <1%","pending","Payloads","Models healthy","High","Automated","Staging","Pre-release","API Eng"
+"TC-078","Security Test","Rate Limit Bypass","Attempt parallel keys to exceed global caps","1) Use 10 API keys 50 rps each
+2) Validate tenant-level caps","Global caps enforce; 429 returned appropriately","pending","Multiple keys","Global quotas configured","Medium","Manual","Staging","Pre-release","API Eng"
+"TC-079","Integration Test","K8s HPA","Autoscale feature-extractor on CPU and lag","1) Raise CPU >80%
+2) HPA scales replicas
+3) Lag reduces","Replicas scale up; lag <120s within 5m","pending","HPA policy","Metrics server active","High","Automated","Staging","Daily","Platform SRE"
+"TC-080","Unit Test","Alert Formatting","Ensure payload includes confidence and indices","1) Generate alert
+2) Validate JSON schema","Schema valid; includes confidence score","pending","Schema definitions","Unit test harness","Low","Automated","Dev","On commit","Notification Eng"
+"TC-081","Integration Test","Kp/Dst Storage","Persistence and query consistency","1) Insert predictions
+2) Query with time_bucket
+3) Validate results","Data accurate; query p95 <5s","pending","Predictions dataset","DB up","Medium","Automated","Staging","Daily","DBA"
+"TC-082","Security Test","CORS Allowed Methods","PATCH/DELETE not exposed","1) Attempt disallowed methods
+2) Expect 405/blocked","No unintended methods allowed","pending","HTTP client","Policy configured","Low","Automated","Dev","On commit","API Eng"
+"TC-083","Integration Test","CME Feature Join","Enrichment joins in Flink job","1) Inject CME events and telemetry
+2) Verify correct join within window","Joined features populated; lag acceptable","pending","Joined streams","Flink job running","Medium","Automated","Staging","Weekly","Data Engineering"
+"TC-084","Performance Test","Pgbouncer Pool","Pool sized to sustain 1000 rps","1) Load 1000 rps API
+2) Monitor db_connection_pool_in_use","No pool exhaustion; response SLA holds","pending","Load generator","Pgbouncer tuned","High","Automated","Production-like","Pre-release","DBA"
+"TC-085","Chaos Test","WAL Growth","Long-running transaction blocks WAL","1) Start long txn; pause
+2) WAL grows; alerts fire
+3) Terminate backend","Space stabilizes; writes resume","pending","SQL session","Monitoring rules set","High","Manual","Staging","Pre-release","DBA"
+"TC-086","Integration Test","Cache Hit Ratio","Warm cache improves latency","1) Prime cache with 100 keys
+2) Measure hit ratio and latency","cache_hit_ratio >80%; latency drops","pending","Priming script","Cache service","Low","Automated","Staging","Weekly","API Eng"
+"TC-087","Performance Test","GRU Inference","Latency and error rate","1) Run 500 req/min
+2) Measure latency/errors","P95 <200ms; errors <0.5%","pending","Payloads","GRU deployed","Medium","Automated","Staging","Weekly","ML Ops"
+"TC-088","Security Test","Headers","Ensure HSTS and security headers on gateway","1) curl -I / returns headers
+2) Validate presence/values","Headers present; secure values","pending","curl","Gateway config","Low","Automated","Staging","On commit","Security"
+"TC-089","Chaos Test","Cache Service","Redis eviction under memory pressure","1) Reduce maxmemory
+2) Flood keys
+3) Verify eviction policy works","No crashes; stale-if-error semantics hold","pending","Redis config access","Isolated cache","Medium","Manual","Staging","Weekly","Platform SRE"
+"TC-090","Integration Test","Model Disagreement Monitor","Alert when divergence > threshold","1) Feed conflicting forecasts
+2) Check alert and fallback ensemble toggle","Alert fired; ENSEMBLE_MODE=weighted applied","pending","Synthetic outputs","Helm access","Medium","Automated","Staging","Daily","ML Ops"

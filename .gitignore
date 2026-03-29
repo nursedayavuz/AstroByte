@@ -1,0 +1,27 @@
+# Ignore large files and archives
+*.zip
+*.rar
+*.tar.gz
+*.pdf
+*.log
+
+# Ignore node modules and build folders
+node_modules/
+dist/
+build/
+.env
+.env.*
+**/.env
+!.env.example
+
+# ML/Data artifacts
+*.keras
+daily_*.csv
+archive.zip
+uvicorn*.log
+
+# Python caches
+__pycache__/
+*.pyc
+.venv/
+venv/

@@ -1,0 +1,242 @@
+1. Yarışma ve konu çerçevesini netleştirelim
+TUA Astro Hackathon 2026 – “Güneş Fırtınaları Erken Uyarı Ağı” konusu, gerçek zamanlı solar wind, manyetik alan, GOES‑XRS, SDO / AIA verileri gibi uzay hava izleyicileri üzerinde çalışan bir sistem bekliyor.
+
+Günlük kullanım için jüride en çok kırılabilecek kriterler:
+
+Veri kaynağı gerçeklik kırılganlığı (örneğin “simüle” yerine real‑time API)
+
+Fiziksel doğruluk (G1–G5 fırtına sınıflandırması, Kp / Dst, X‑ray bandı, proton eneri seviyeleri)
+
+Gerçek zamanlılık: uyarı gecikmesi (15–60 dk arası, DSCOVR’ın fiziksel limiti)
+
+Uygulama etkisi: hangi altyapı/uydu/elektrik şebekesi endeksi kullanıldığını göstermen
+
+2. Mevcut projenin muhtemel “doğru / eksik / hatalı” yönleri
+Çünkü ZIP’i göremiyorum, bu kısmı tipik lise/öğrenci projelerinde sık görülen eksiklik ve hatalar üzerinden yazıyorum; sen kendi dosyalarını tarayıp, buradaki maddelerle eşleştirebilirsin.
+
+2.1 Doğru / iyi olabilecek kısımlar (senin tarafın)
+Güneş fırtınası sınıflandırması (G1–G5) ve Kp indeksi’ne göre kategori ataması.
+Bu, SWPC / NOAA standardı olduğu için çok değerli; akademik olarak doğrulanmış.
+
+Dashy / Panel tabanlı bir sunum (grafik, anlık uyarı, Kp / Dst, X‑ray).
+
+Team toplamda veri + AI + frontend ayrımı olmuşsa mimari olarak çok iyi.
+
+Trend / zaman serisi grafiği ile geçmiş fırtınaları göstermişsen, çok güçlü bir görsel argüman.
+
+2.2 Muhtemel eksikler (jüri çok dikkat eder)
+Veri kaynağının gerçek zamanlı olmaması:
+
+Sadece statik CSV / suni veri + “simüle” uyarı varsa → bu akademik değeri çok düşürür.
+
+Gerçek dünya için NOAA SWPC, DSCOVR, GOES, SDO, ACE gibi API’ların birini kullanmak şart.
+
+Fiziksel doğrulama yok:
+
+Sadece “AI çıktı” → “şiddetli” diyor, ama G1–G5 eşiğine, X‑ray seviyesine, Kp seviyesine, proton eneri >10 MeV’e bağlamıyorsa, bu basit bir sınıflandırma panelden ibaret sayılır.
+
+Uyarı gecikmesi (lead time)’nın yokluğu:
+
+Gerçek fiziksel sistemde DSCOVR ile 15–60 dk arası uyarı vardır; bunu modelinizde “lead‑time analizi” değilse, “erken uyarı” iddiası zayıf kalır.
+
+Altyapı etkisi kısmı çok yüzeysel:
+
+“Uydu sinyalinde bozulma olabilir” demek yerine:
+
+GNSS hata oranı,
+
+HF/ VHF iletişim düşüşü,
+
+HVDC şebeke akım harmonikleri
+vb. gösterecek bir endeks / risk skoru yoksa jüri sadece “görsel panel” ile kalır.
+
+2.3 Muhtemel teknik / mimari hatalar
+Yapay zeka kısmı çok “black‑box”:
+
+Arka planda sadece sklearn / LSTM ama loss, feature importance, SHAP, threshold ayarı, calibration, false‑alarm / false‑negative oranı yoksa → ürün değil deneme algısı oluşur.
+
+Frontend ve backend bağ akışsız:
+
+Panelde “tıklayınca uyarı yarat” gibi simüle fonksiyonlar, ama veri pipeline’ı (API → veri temizliği → model → uyarı → log) net değildirse, jüri “demo” zevkine iner.
+
+Veri derinliği yok:
+
+Sadece X‑ray şiddeti var; manyetik alan (Bz), solar wind hızı, proton & elektron fluks, Kp/Dst indeksi gibi multi‑channel yoksa → fiziksel olarak eksik bir model.
+
+Zamanlama ve cache:
+
+Gerçek zamanlı veri varsa bile veri cache/ retry / timeout yoksa → 48 saat boyunca paneller crash olabilir.
+
+Frontend tarafında Kp, Dst, XRS, Solar Wind bütününü tek bir timeline’da göstermiyorsan → veri entegrasyonu çok zayıf görünür.
+
+3. Jüri gözünden kırılabilecek kriterler (maksimum seviye eleştiri)
+Akademik ve jüri gözünden tipik puan kırıcılar:
+
+Kriter	Nasıl kırılabilir?
+Veri ve gerçekeşiklik	Kroki veri, simüle uyarı, hayali API, kaynağın açıkça gösterilmemesi. 
+Fiziksel doğruluk	G1–G5 yalnızca sayısal aralıklarla verilmiş, ama XRS, Bz, Kp ilişkisi yok, NOAA standartları ile uyuşmuyor. 
+Lead time (geçikme)	Alarm anında patlama oluyor, “erken” değil; modelin kaç dakika önceden uyarı verdiğini göstermiyor. 
+Model kalitesi	Sadece accuracy, auc yok; false‑alarm, false‑negative, threshold tuning, calibration, feature importance yok.
+Altyapı etkisi	Sadece “teknoloji bozulur” demek; GNSS, haberleşme, güç şebekesi, uydu yörünge bozulması için sayısal/indikatif metrik yok. 
+Ürün / sistem mimarisi	Yalnızca bir dashboard; API, veri pipeline, log, cache, fallback, error handling yok.
+Frontend entegrasyonu	Her veri kaynağı ayrı tab, aynı zaman çizgisi (timeline) yok; filtre / zoom / export eksik.
+Bu tabloyu rapor ve sunumda “Risk & Kırılabilecek Yerler” başlığı altında kullanabilirsin; jüriyi “biz bunları biliyoruz” mesajı gösterir.
+
+4. 48 saat içinde “final seviyesine taşıyacak” inovatif ekler
+Şimdi gelecek kısmı 48 saatlik zaman dilimine sıkıştırılmış, akşam 12’ye kadar hazır edilebilir şekilde planlıyorum.
+
+4.1 Veri ve fiziksel güvence (en çok puan alacağın yer)
+4.1.1 Gerçekeşik veri pipeline’ı ekle
+En az bir gerçek API entegre et:
+
+NOAA SWPC / DSCOVR / GOES:
+
+https://services.swpc.noaa.gov/ – products/solar-wind/, products/geospace/ gibi.
+
+X‑ray, solar wind, Bz, Kp, Dst, proton flux açık veri.
+
+SDO / GOES‑AIA (opsiyonel):
+
+Flare’in bölgesel konumu ve XRS bandı, panelde “güneş haritası” gibi gösterilebilir.
+
+Backend’de basit bir pipeline:
+
+python
+# örnek: 15–30 dk aralıklık poll
+fetch_noaa_solar_wind()
+fetch_noaa_kp_dst()
+fetch_noaa_goes_xrs()
+# → preprocessing → model → alarm_state
+Frontend’de timeline:
+
+X‑ray, Bz, Kp, proton flux, alarm level’ı aynı zaman çizgisinde göster.
+
+Yazım:
+
+“T‑30 dk alarm → T anı: G3 fırtına” şeklinde gerçek zaman çizgisi.
+
+4.1.2 Fiziksel sınıflandırma (G1–G5 ilişkisi)
+G1–G5 sınırlarını tablo olarak rapora koy (NOAA’ya göre):
+Sınıf	XRS seviyesi (W/m²)	Kp	Etki
+G1	≥1×10⁻⁵	5	Hafif, uydu sinyalinde küçük gecikmeler
+G2	≥1×10⁻⁴	6	Orta, HF iletişimde kesintiler
+G3	≥1×10⁻³	7	Şiddetli, GNSS hataları, yüksek enlemlerde şebeke gerilim dalgalanmaları
+G4	≥1×10⁻²	8	Çok şiddetli, GNSS ciddi bozulma, uydu sinyal kaybı
+G5	≥1×10⁻¹	9	Ekstrem, ulus‑ölçekli şebeke kesintisi riski
+
+Panelde bu tabloyu referans gösteren bir “Classification Legend” ekle.
+
+Alarm mesajlarında kesinlikle:
+
+“G3 – Orta Şiddetli Fırtına, GNSS hata oranı %X–Y arası beklenebilir”
+gibi yaz.
+
+
+4.2 Yapay Zeka & model mimarisi (projeyi “ÜRÜN”e dönüştürmek için)
+4.2.1 Hangi model mimari daha güçlü?
+48 saatte ideal olan:
+
+Temel katman:
+
+LightGBM / XGBoost (XRS, solar wind, proton flux, Kp, Dst, tarih/saat özellikler) → hızlı train, feature importance gösterilebilir.
+
+Zaman serisi ekleme:
+
+1D‑CNN veya Transformer (Tiny BERT‑tarzı) → 1–6 saatlik geçmiş X‑ray + solar wind → 15–60 dk sonraki “G1–G5” tahmini.
+
+Risk skoru:
+
+risk_score = 0.3*SolarWindSpeed + 0.4*|Bz| + 0.2*ProtonFlux + 0.1*DstDeriv
+gibi bir fiziksel endeks + ML skoru’nu kombinleyen hibrit model.
+
+4.2.2 Model kritik çıktılarını kesinlikle göster
+Sunumda ve raporda şu kısım olmazsa olmaz:
+
+Confusion matrix (G1–G5 sınıflarına göre)
+
+False‑alarm / false‑negative oranı
+
+Modellerin “threshold tuning” (kaç G1’i kaçırdık, kaç G3’ü G1 olarak sınıflandırdık)
+
+SHAP / feature importance (Bz mi, XRS mi, proton flux mu daha fazla etkili?)
+
+Lead time analizi:
+
+15–30–60 dk önce tahmin edilen skorun, geriye doğru analizi (ROC, AUC, precision‑recall).
+
+Bu sayede jüri:
+
+“Bu sadece bir dashboard değil, fiziksel basis + ML + risk skoru’na sahip bir early warning sistemi”
+diye okuyacaktır.
+
+4.3 Altyapı & kullanım etkisi (projeni “dünya çapında projeye” taşıyacak kısım)
+4.3.1 Uyarı seviyeleri ve kullanıcı profilleri
+Kullanıcı tipleri:
+
+Uydu operatörü
+
+GNSS / navigasyon firma
+
+Elektrik şebekesi operatörü
+
+Kargo / hava trafik
+
+Her profile göre metrik tablolar ekle:
+
+Uydu operatörü:
+
+“G3–G5: Yörünge değişimi, swath azalması, bit error rate %X–Y tahmini”
+
+GNSS / GPS:
+
+“G3–G5: Horizontal position error ≥5–15 m, 10–30 dk aralıklarla kayıp”
+
+Güç şebekesi:
+
+“G4–G5: HVDC şebekesi harmonikler, lokal panik kesinti riski”
+
+Bu bilimsel literatür ve NOAA raporları üzerinden yapılabilir;
+
+bunları raporda birer tablo ve panelden “sector” dropdown ile göster.
+
+4.3.2 “Digital Twin”–tarzı mini simülasyon
+Basit bir GNSS hata simülasyonu:
+
+Normal hat: ±1 m
+
+G1: ±3 m
+
+G3: ±10 m
+
+G5: ±30 m veya “no signal”
+
+Bu veri grafik/timeline üzerinde “GNSS Accuracy Degradation” trace olarak gösterilebilir.
+
+4.3.3 API / webhook / webhook‑gönderilebilir uyarı
+48 saat içinde ekleyebileceğin çok güçlü özellik:
+
+Webhook / email alarm
+
+“G3 alarmı triggedi → POST /webhook → email → GNSS operatörü”
+
+Telegram / Slack bot uyarısı.
+
+Bu, projeyi “demo”dan “kullanılabilir sistem”e taşıyacak.
+
+5. Panel ve frontend’de 48 saatlik “upgrade listesi”
+5.1 Panel mimarisi iyileştirmeleri
+Single timeline tabanlı yapı:
+
+XRS, Bz, solar wind, Kp, risk skoru, alarm level, GNSS error, Dst – hepsi aynı zaman çizgisi.
+
+Rolling window:
+
+Son 72 saat, 24 saat, 6 saat, 1 saat olarak zoom.
+
+Real‑time indicator:
+
+“Last updated: 13:47, 15 sec ago”
+
+Kurtarma / fallback:
+
+Gerçek API down olursa, statik örnek veri seti (2024–2025 tarihi G3/G4 fırtınaları) ile
